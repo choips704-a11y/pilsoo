@@ -1992,6 +1992,117 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
   }
 
+  function percentile(values, ratio) {
+    if (!values.length) return 0;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * ratio)));
+    return sorted[index];
+  }
+
+  function analyzeImageCells(image, width, height, invert) {
+    const sampleScale = Math.max(4, Math.min(8, Math.floor(240 / Math.max(width, height))));
+    const sampleWidth = width * sampleScale;
+    const sampleHeight = height * sampleScale;
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleWidth;
+    canvas.height = sampleHeight;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+
+    const data = ctx.getImageData(0, 0, sampleWidth, sampleHeight).data;
+    const cells = [];
+    const luminanceValues = [];
+    const edgeValues = [];
+
+    for (let row = 0; row < height; row += 1) {
+      const line = [];
+      for (let col = 0; col < width; col += 1) {
+        let luminanceSum = 0;
+        let saturationSum = 0;
+        let alphaSum = 0;
+        let edgeSum = 0;
+        let count = 0;
+
+        for (let y = row * sampleScale; y < (row + 1) * sampleScale; y += 1) {
+          for (let x = col * sampleScale; x < (col + 1) * sampleScale; x += 1) {
+            const index = (y * sampleWidth + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            const alpha = data[index + 3] / 255;
+            const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+            let edge = 0;
+
+            if (x + 1 < sampleWidth) {
+              const next = ((y * sampleWidth) + x + 1) * 4;
+              const nextLuminance = 0.299 * data[next] + 0.587 * data[next + 1] + 0.114 * data[next + 2];
+              edge += Math.abs(luminance - nextLuminance);
+            }
+            if (y + 1 < sampleHeight) {
+              const next = (((y + 1) * sampleWidth) + x) * 4;
+              const nextLuminance = 0.299 * data[next] + 0.587 * data[next + 1] + 0.114 * data[next + 2];
+              edge += Math.abs(luminance - nextLuminance);
+            }
+
+            luminanceSum += luminance * alpha;
+            saturationSum += saturation * alpha;
+            alphaSum += alpha;
+            edgeSum += edge * alpha;
+            count += 1;
+          }
+        }
+
+        const visibleRatio = alphaSum / count;
+        const luminance = alphaSum > 0 ? luminanceSum / alphaSum : 255;
+        const saturation = alphaSum > 0 ? saturationSum / alphaSum : 0;
+        const edge = alphaSum > 0 ? edgeSum / alphaSum : 0;
+        const cell = { luminance, saturation, edge, visibleRatio };
+        line.push(cell);
+        if (visibleRatio > 0.08) {
+          luminanceValues.push(luminance);
+          edgeValues.push(edge);
+        }
+      }
+      cells.push(line);
+    }
+
+    const low = percentile(luminanceValues, 0.04);
+    const high = percentile(luminanceValues, 0.96);
+    const edgeHigh = Math.max(1, percentile(edgeValues, 0.90));
+    const range = Math.max(12, high - low);
+
+    return cells.map((line) => line.map((cell) => {
+      const normalized = Math.min(255, Math.max(0, ((cell.luminance - low) / range) * 255));
+      const colorDetail = Math.min(255, cell.saturation * 0.9);
+      const edgeDetail = Math.min(255, (cell.edge / edgeHigh) * 255);
+      const toneScore = invert ? normalized : 255 - normalized;
+      return {
+        visibleRatio: cell.visibleRatio,
+        score: toneScore * 0.78 + colorDetail * 0.14 + edgeDetail * 0.08
+      };
+    }));
+  }
+
+  function smoothConvertedGrid(grid) {
+    const height = grid.length;
+    const width = grid[0]?.length || 0;
+    return grid.map((line, row) => line.map((value, col) => {
+      let neighbors = 0;
+      for (let y = Math.max(0, row - 1); y <= Math.min(height - 1, row + 1); y += 1) {
+        for (let x = Math.max(0, col - 1); x <= Math.min(width - 1, col + 1); x += 1) {
+          if (y === row && x === col) continue;
+          neighbors += grid[y][x];
+        }
+      }
+      if (value === 1 && neighbors === 0) return 0;
+      if (value === 0 && neighbors >= 7) return 1;
+      return value;
+    }));
+  }
+
   function convertImageToGrid() {
     if (!uploadedImage) {
       els.convertSummary.textContent = "\uba3c\uc800 \uc774\ubbf8\uc9c0\ub97c \uc120\ud0dd\ud558\uc138\uc694.";
@@ -2003,30 +2114,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.gridWidth.value = String(width);
     els.gridHeight.value = String(height);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(uploadedImage, 0, 0, width, height);
-    const data = ctx.getImageData(0, 0, width, height).data;
     const threshold = Number(els.threshold.value) || 150;
     const invert = els.invertImage.checked;
-    convertedGrid = [];
+    const cells = analyzeImageCells(uploadedImage, width, height, invert);
+    const cutoff = 255 - threshold;
+    convertedGrid = cells.map((line) => line.map((cell) => (
+      cell.visibleRatio > 0.08 && cell.score >= cutoff ? 1 : 0
+    )));
 
-    for (let row = 0; row < height; row += 1) {
-      const line = [];
-      for (let col = 0; col < width; col += 1) {
-        const index = (row * width + col) * 4;
-        const r = data[index];
-        const g = data[index + 1];
-        const b = data[index + 2];
-        const alpha = data[index + 3];
-        const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-        const filled = alpha > 20 && (invert ? brightness >= threshold : brightness < threshold);
-        line.push(filled ? 1 : 0);
-      }
-      convertedGrid.push(line);
-    }
+    convertedGrid = smoothConvertedGrid(convertedGrid);
 
     els.convertPreview.innerHTML = "";
     els.convertPreview.appendChild(renderMiniGrid(convertedGrid, { interactive: false }));
