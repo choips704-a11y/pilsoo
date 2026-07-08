@@ -653,11 +653,10 @@ code {
           <div class="tools" aria-label="tools">
             <button id="paintTool" class="active" type="button">&#9632; &#52832;&#54616;&#44592;</button>
             <button id="markTool" type="button">x &#54364;&#49884;</button>
-            <button id="eraseTool" type="button">&#51648;&#50864;&#44592;</button>
           </div>
 
           <div class="actions">
-            <button id="checkBtn" type="button">&#51221;&#45813; &#54869;&#51064;</button>
+            <button id="checkBtn" class="teacher-only" type="button">&#51221;&#45813; &#54869;&#51064;</button>
             <button id="resetBtn" class="secondary" type="button">&#45796;&#49884; &#49884;&#51089;</button>
             <button id="deletePuzzleBtn" class="danger teacher-only" type="button">&#49440;&#53469; &#54140;&#51600; &#51648;&#50864;&#44592;</button>
             <button id="deleteAllGeneratedBtn" class="danger teacher-only" type="button">&#49373;&#49457;&#54620; &#44163; &#51204;&#52404; &#49325;&#51228;</button>
@@ -945,7 +944,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     message: document.getElementById("message"),
     paintTool: document.getElementById("paintTool"),
     markTool: document.getElementById("markTool"),
-    eraseTool: document.getElementById("eraseTool"),
     checkBtn: document.getElementById("checkBtn"),
     resetBtn: document.getElementById("resetBtn"),
     deletePuzzleBtn: document.getElementById("deletePuzzleBtn"),
@@ -1291,7 +1289,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     tool = nextTool;
     els.paintTool.classList.toggle("active", tool === "paint");
     els.markTool.classList.toggle("active", tool === "mark");
-    els.eraseTool.classList.toggle("active", tool === "erase");
   }
 
   function updateStats() {
@@ -2003,7 +2000,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.tabs.forEach((tab) => tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
     els.paintTool.addEventListener("click", () => setTool("paint"));
     els.markTool.addEventListener("click", () => setTool("mark"));
-    els.eraseTool.addEventListener("click", () => setTool("erase"));
     els.shareQrBtn.addEventListener("click", openQrDialog);
     els.teacherModeBtn.addEventListener("click", toggleTeacherMode);
     els.closeQrBtn.addEventListener("click", closeQrDialog);
