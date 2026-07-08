@@ -640,7 +640,7 @@ code {
               <strong id="filledCount">0</strong>
               <span>&#52832;&#54620; &#52856;</span>
             </div>
-            <div>
+            <div class="teacher-only">
               <strong id="mistakeCount">0</strong>
               <span>&#50724;&#45813;</span>
             </div>
@@ -656,6 +656,7 @@ code {
           </div>
 
           <div class="actions">
+            <button id="submitBtn" type="button">&#51228;&#52636;</button>
             <button id="checkBtn" class="teacher-only" type="button">&#51221;&#45813; &#54869;&#51064;</button>
             <button id="resetBtn" class="secondary" type="button">&#45796;&#49884; &#49884;&#51089;</button>
             <button id="deletePuzzleBtn" class="danger teacher-only" type="button">&#49440;&#53469; &#54140;&#51600; &#51648;&#50864;&#44592;</button>
@@ -944,6 +945,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     message: document.getElementById("message"),
     paintTool: document.getElementById("paintTool"),
     markTool: document.getElementById("markTool"),
+    submitBtn: document.getElementById("submitBtn"),
     checkBtn: document.getElementById("checkBtn"),
     resetBtn: document.getElementById("resetBtn"),
     deletePuzzleBtn: document.getElementById("deletePuzzleBtn"),
@@ -1309,7 +1311,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function checkAnswer() {
-    let solved = true;
+    let solved = isSolved();
     document.querySelectorAll(".cell").forEach((cell) => cell.classList.remove("wrong"));
 
     state.forEach((row, rowIndex) => {
@@ -1328,6 +1330,32 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.message.className = solved ? "message success" : "message error";
     els.message.textContent = solved ? text.solved : text.notSolved;
     saveProgress(solved);
+  }
+
+  function isSolved() {
+    return currentPuzzle.grid.every((row, rowIndex) => {
+      return row.every((value, colIndex) => {
+        return (value === 1) === (state[rowIndex][colIndex] === 1);
+      });
+    });
+  }
+
+  async function submitAnswer() {
+    document.querySelectorAll(".cell").forEach((cell) => cell.classList.remove("wrong"));
+    if (!els.studentName.value.trim()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uba3c\uc800 \uc774\ub984\uc744 \uc785\ub825\ud558\uc138\uc694.";
+      return;
+    }
+    if (!isSolved()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uc544\uc9c1 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. \ud55c \ubc88 \ub354 \ud655\uc778\ud574 \ubcf4\uc138\uc694.";
+      await saveProgress(false);
+      return;
+    }
+    els.message.className = "message success";
+    els.message.textContent = "\uc81c\ucd9c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.";
+    await saveProgress(true);
   }
 
   function storageKey() {
@@ -2007,6 +2035,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.qrDialog.addEventListener("click", (event) => {
       if (event.target === els.qrDialog) closeQrDialog();
     });
+    els.submitBtn.addEventListener("click", submitAnswer);
     els.checkBtn.addEventListener("click", checkAnswer);
     els.resetBtn.addEventListener("click", resetPuzzle);
     els.deletePuzzleBtn.addEventListener("click", deleteSelectedPuzzle);
