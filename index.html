@@ -375,6 +375,13 @@ button.danger:hover {
   white-space: pre-line;
 }
 
+.clue.done {
+  color: #8b969b;
+  text-decoration: line-through;
+  text-decoration-color: var(--warn);
+  text-decoration-thickness: 2px;
+}
+
 .cell {
   position: relative;
   background: white;
@@ -1170,6 +1177,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return clues.length ? clues : [0];
   }
 
+  function sameClues(first, second) {
+    return first.length === second.length && first.every((value, index) => value === second[index]);
+  }
+
+  function lineIsComplete(solutionLine, playedLine) {
+    return sameClues(cluesFor(solutionLine), cluesFor(playedLine.map((value) => value === 1 ? 1 : 0)));
+  }
+
   function makeBlankState(grid) {
     return grid.map((row) => row.map(() => 0));
   }
@@ -1302,15 +1317,16 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
     for (let col = 0; col < colCount; col += 1) {
       const line = currentPuzzle.grid.map((row) => row[col]);
+      const playedLine = state.map((row) => row[col]);
       const clue = document.createElement("div");
-      clue.className = "clue";
+      clue.className = lineIsComplete(line, playedLine) ? "clue done" : "clue";
       clue.textContent = cluesFor(line).join("\n");
       els.board.appendChild(clue);
     }
 
     for (let row = 0; row < rowCount; row += 1) {
       const clue = document.createElement("div");
-      clue.className = "clue";
+      clue.className = lineIsComplete(currentPuzzle.grid[row], state[row]) ? "clue done" : "clue";
       clue.textContent = cluesFor(currentPuzzle.grid[row]).join(" ");
       els.board.appendChild(clue);
 
