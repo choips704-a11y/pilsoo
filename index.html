@@ -987,6 +987,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let splitPieces = [];
   let combinedPieceGrid = null;
   let uploadedImage = null;
+  let liveRefreshBusy = false;
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
   let teacherMode = params.get("teacher") === "1" || localStorage.getItem("nonogramTeacherMode") === "1";
@@ -1049,6 +1050,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       switchTab("play");
     }
     window.requestAnimationFrame(renderBoard);
+    liveRefreshTeacherViews();
   }
 
   function toggleTeacherMode() {
@@ -1350,12 +1352,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (!isSolved()) {
       els.message.className = "message error";
       els.message.textContent = "\uc544\uc9c1 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. \ud55c \ubc88 \ub354 \ud655\uc778\ud574 \ubcf4\uc138\uc694.";
-      await saveProgress(false);
+      await saveProgress(false, { submitted: false });
       return;
     }
     els.message.className = "message success";
     els.message.textContent = "\uc81c\ucd9c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.";
-    await saveProgress(true);
+    await saveProgress(true, { submitted: true });
   }
 
   function storageKey() {
@@ -1425,7 +1427,17 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     saveTimer = window.setTimeout(() => saveProgress(false), 450);
   }
 
-  async function saveProgress(solved) {
+  async function saveProgress(solved, options) {
+    const meta = options || {};
+    const key = storageKey();
+    let wasSubmitted = false;
+    try {
+      const previous = JSON.parse(localStorage.getItem(key) || "{}");
+      wasSubmitted = Boolean(previous.submitted);
+    } catch (error) {
+      wasSubmitted = false;
+    }
+    const submitted = Object.prototype.hasOwnProperty.call(meta, "submitted") ? Boolean(meta.submitted) : wasSubmitted;
     const payload = {
       studentName: els.studentName.value.trim() || "guest",
       puzzleId: currentPuzzle.id,
@@ -1438,10 +1450,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       solved: Boolean(solved),
       width: currentPuzzle.grid[0].length,
       height: currentPuzzle.grid.length,
+      submitted: submitted,
       updatedAt: new Date().toISOString()
     };
 
-    const key = storageKey();
     localStorage.setItem(key, JSON.stringify(payload));
     rememberLocalSession(key);
 
@@ -1651,9 +1663,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       }
     }
 
-    loadedSessions = sessions.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    loadedSessions = sessions.sort(sortSessions);
     renderSessions();
     return loadedSessions;
+  }
+
+  function sortSessions(a, b) {
+    if (Boolean(a.submitted) !== Boolean(b.submitted)) return a.submitted ? -1 : 1;
+    if (Boolean(a.solved) !== Boolean(b.solved)) return a.solved ? -1 : 1;
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
   }
 
   function renderSessions() {
@@ -1666,12 +1684,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       return;
     }
 
-    els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions}`;
+    const submittedCount = loadedSessions.filter((session) => session.submitted).length;
+    els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c`;
     loadedSessions.forEach((session, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "session-row";
-      button.innerHTML = `<strong>${session.studentName || "guest"}</strong><span>${session.solved ? "\uc815\ub2f5" : "\uc9c4\ud589 \uc911"} 쨌 ${session.source}</span>`;
+      button.innerHTML = `<strong>${session.studentName || "guest"}</strong><span>${session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911"} 쨌 ${session.source}</span>`;
       button.addEventListener("click", () => renderSessionPreview(session));
       els.sessionList.appendChild(button);
       if (index === 0) renderSessionPreview(session);
@@ -1689,7 +1708,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   function mergeSessions() {
     const puzzle = puzzles.find((item) => item.id === els.mergePuzzleSelect.value) || currentPuzzle;
     const compatible = loadedSessions.filter((session) => {
-      return session.puzzleId === puzzle.id &&
+      return session.submitted &&
+        session.puzzleId === puzzle.id &&
         Array.isArray(session.state) &&
         session.state.length === puzzle.grid.length &&
         session.state[0] &&
@@ -1843,10 +1863,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       }
     }
 
-    return sessions.sort((a, b) => {
-      if (a.solved !== b.solved) return a.solved ? -1 : 1;
-      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
-    });
+    return sessions.sort(sortSessions);
   }
 
   async function combinePieceSessions() {
@@ -1864,7 +1881,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const used = [];
     for (const piecePuzzle of pieces) {
       const sessions = await loadSessionsForPuzzleId(piecePuzzle.id);
-      const session = sessions[0];
+      const session = sessions.find((item) => item.submitted) || null;
       if (!session) continue;
       filledPieces += 1;
       used.push(`${piecePuzzle.title}: ${session.studentName || "guest"}`);
@@ -2022,6 +2039,34 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
     els.tabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === tabName));
     els.panels.forEach((panel) => panel.classList.toggle("active", panel.id === `${tabName}Tab`));
+    liveRefreshTeacherViews();
+  }
+
+  function activeTabName() {
+    const active = Array.from(els.panels).find((panel) => panel.classList.contains("active"));
+    return active ? active.id.replace(/Tab$/, "") : "play";
+  }
+
+  async function liveRefreshTeacherViews() {
+    if (!teacherMode || liveRefreshBusy) return;
+    const tabName = activeTabName();
+    if (!["review", "merge", "pieces"].includes(tabName)) return;
+    liveRefreshBusy = true;
+    try {
+      if (tabName === "review") {
+        await loadSessions();
+      } else if (tabName === "merge") {
+        els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
+        await loadSessions();
+        mergeSessions();
+      } else if (tabName === "pieces") {
+        await combinePieceSessions();
+      }
+    } catch (error) {
+      console.warn(error);
+    } finally {
+      liveRefreshBusy = false;
+    }
   }
 
   function bindEvents() {
@@ -2088,6 +2133,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       saveProgress(false);
     });
     window.addEventListener("resize", renderBoard);
+    window.setInterval(liveRefreshTeacherViews, 3500);
   }
 
   async function init() {
