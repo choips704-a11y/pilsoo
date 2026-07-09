@@ -1035,7 +1035,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-1";
+  const APP_VERSION = "2026-07-09-qr-cache-2";
   let db = null;
   let puzzles = builtInPuzzles.slice();
   let currentPuzzle = puzzles[0];
@@ -1109,7 +1109,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     document.body.classList.toggle("teacher-mode", teacherMode);
     document.body.classList.toggle("student-mode", !teacherMode);
     els.teacherModeBtn.textContent = teacherMode ? "\ud559\uc0dd \ubcf4\uae30" : "\uad50\uc0ac \ubaa8\ub4dc";
-    els.puzzleSelect.disabled = !teacherMode && Boolean(assignedPuzzleId);
+    els.puzzleSelect.disabled = false;
     if (!teacherMode && !document.getElementById("playTab").classList.contains("active")) {
       switchTab("play");
     }
