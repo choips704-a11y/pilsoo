@@ -444,18 +444,63 @@ code {
 }
 
 .session-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 10px;
-  min-height: 48px;
+  min-height: 64px;
   text-align: left;
 }
 
-.session-row span {
+.session-row strong {
+  display: block;
+}
+
+.session-row span,
+.session-meta {
   color: var(--muted);
   font-size: 12px;
-  white-space: nowrap;
+}
+
+.session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.session-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-badge.good {
+  border-color: rgba(21, 128, 118, .25);
+  background: #e5f5f3;
+  color: var(--accent-dark);
+}
+
+.session-badge.warn {
+  border-color: rgba(188, 75, 45, .25);
+  background: #fff0eb;
+  color: var(--warn);
+}
+
+.session-detail {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.session-detail p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .preview-box {
@@ -1035,7 +1080,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-2";
+  const APP_VERSION = "2026-07-09-qr-cache-3";
   let db = null;
   let puzzles = builtInPuzzles.slice();
   let currentPuzzle = puzzles[0];
@@ -1747,6 +1792,59 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
   }
 
+  function formatDuration(totalSeconds) {
+    const total = Math.max(0, Number(totalSeconds) || 0);
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${minutes}\ubd84 ${secs}\ucd08`;
+  }
+
+  function formatUpdatedAt(value) {
+    if (!value) return "";
+    const raw = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+    if (Number.isNaN(raw.getTime())) return "";
+    return raw.toLocaleString("ko-KR", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function sessionStats(session) {
+    const puzzle = puzzles.find((item) => item.id === session.puzzleId);
+    const grid = puzzle ? puzzle.grid : null;
+    const stateGrid = Array.isArray(session.state) ? session.state : [];
+    let filled = 0;
+    let answerFilled = 0;
+    let correct = 0;
+    let total = 0;
+
+    stateGrid.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => {
+        if (value === 1) filled += 1;
+        if (grid && grid[rowIndex] && typeof grid[rowIndex][colIndex] !== "undefined") {
+          total += 1;
+          const expected = grid[rowIndex][colIndex] === 1;
+          const played = value === 1;
+          if (expected) answerFilled += 1;
+          if (expected === played) correct += 1;
+        }
+      });
+    });
+
+    const accuracy = total ? Math.round((correct / total) * 100) : null;
+    const fillRate = answerFilled ? Math.round((filled / answerFilled) * 100) : 0;
+    return { accuracy, filled, fillRate };
+  }
+
+  function appendBadge(parent, label, type) {
+    const badge = document.createElement("span");
+    badge.className = `session-badge ${type || ""}`.trim();
+    badge.textContent = label;
+    parent.appendChild(badge);
+  }
+
   function renderSessions() {
     els.sessionList.innerHTML = "";
     els.sessionPreview.innerHTML = "";
@@ -1758,12 +1856,25 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
 
     const submittedCount = loadedSessions.filter((session) => session.submitted).length;
-    els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c`;
+    const solvedCount = loadedSessions.filter((session) => session.solved).length;
+    els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c / \uc815\ub2f5 ${solvedCount}\uac1c`;
     loadedSessions.forEach((session, index) => {
+      const stats = sessionStats(session);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "session-row";
-      button.innerHTML = `<strong>${session.studentName || "guest"}</strong><span>${session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911"} 쨌 ${session.source}</span>`;
+      const name = document.createElement("strong");
+      name.textContent = session.studentName || "guest";
+      const meta = document.createElement("div");
+      meta.className = "session-meta";
+      appendBadge(meta, session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911", session.submitted ? "good" : "");
+      appendBadge(meta, session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc", session.solved ? "good" : "warn");
+      appendBadge(meta, `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`);
+      appendBadge(meta, `\uce60\ud55c \uce78 ${stats.filled}\uac1c`);
+      appendBadge(meta, formatDuration(session.seconds));
+      if (formatUpdatedAt(session.updatedAt)) appendBadge(meta, formatUpdatedAt(session.updatedAt));
+      button.appendChild(name);
+      button.appendChild(meta);
       button.addEventListener("click", () => renderSessionPreview(session));
       els.sessionList.appendChild(button);
       if (index === 0) renderSessionPreview(session);
@@ -1772,9 +1883,23 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function renderSessionPreview(session) {
     els.sessionPreview.innerHTML = "";
+    const stats = sessionStats(session);
     const title = document.createElement("h3");
-    title.textContent = `${session.studentName || "guest"} 쨌 ${session.puzzleTitle || session.puzzleId}`;
+    title.textContent = `${session.studentName || "guest"} - ${session.puzzleTitle || session.puzzleId}`;
     els.sessionPreview.appendChild(title);
+    const detail = document.createElement("div");
+    detail.className = "session-detail";
+    const summary = document.createElement("p");
+    summary.textContent = [
+      session.submitted ? "\uc81c\ucd9c\ub428" : "\uc9c4\ud589 \uc911",
+      session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc",
+      `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`,
+      `\uce60\ud55c \uce78 ${stats.filled}\uac1c`,
+      formatDuration(session.seconds),
+      formatUpdatedAt(session.updatedAt)
+    ].filter(Boolean).join(" / ");
+    detail.appendChild(summary);
+    els.sessionPreview.appendChild(detail);
     els.sessionPreview.appendChild(renderMiniGrid(session.state, { interactive: false }));
   }
 
