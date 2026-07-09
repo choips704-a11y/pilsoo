@@ -1035,6 +1035,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
+  const APP_VERSION = "2026-07-09-qr-cache-1";
   let db = null;
   let puzzles = builtInPuzzles.slice();
   let currentPuzzle = puzzles[0];
@@ -1086,6 +1087,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   function currentShareUrl() {
     const url = new URL(window.location.href.split("#")[0]);
     url.searchParams.delete("teacher");
+    url.searchParams.set("v", APP_VERSION);
     if (teacherMode && currentPuzzle) {
       url.searchParams.set("puzzle", currentPuzzle.id);
     }
