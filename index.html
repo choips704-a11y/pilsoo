@@ -442,7 +442,11 @@ code {
 }
 
 .session-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
   margin-bottom: 12px;
+  align-items: start;
 }
 
 .session-row {
@@ -450,6 +454,8 @@ code {
   gap: 10px;
   min-height: 64px;
   text-align: left;
+  align-content: start;
+  justify-items: start;
 }
 
 .session-row strong {
@@ -466,6 +472,11 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.session-thumb {
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .session-badge {
@@ -1085,7 +1096,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-7";
+  const APP_VERSION = "2026-07-09-qr-cache-8";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1094,6 +1105,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let tool = "paint";
   let startedAt = Date.now();
   let seconds = 0;
+  let timerStopped = false;
   let saveTimer = null;
   let loadedSessions = [];
   let mergedGrid = null;
@@ -1691,6 +1703,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
     els.message.className = "message success";
     els.message.textContent = "\uc81c\ucd9c\ub418\uc5c8\uc2b5\ub2c8\ub2e4.";
+    seconds += Math.floor((Date.now() - startedAt) / 1000);
+    startedAt = Date.now();
+    timerStopped = true;
+    tick();
     await saveProgress(true, { submitted: true });
   }
 
@@ -1777,7 +1793,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       parentTitle: currentPuzzle.parentTitle || "",
       piece: currentPuzzle.piece || null,
       state: state,
-      seconds: seconds + Math.floor((Date.now() - startedAt) / 1000),
+      seconds: timerStopped ? seconds : seconds + Math.floor((Date.now() - startedAt) / 1000),
       solved: Boolean(solved),
       width: currentPuzzle.grid[0].length,
       height: currentPuzzle.grid.length,
@@ -1814,6 +1830,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       if (Array.isArray(parsed.state)) {
         state = parsed.state;
         seconds = Number(parsed.seconds) || 0;
+        timerStopped = Boolean(parsed.submitted);
+        startedAt = Date.now();
         return true;
       }
     } catch (error) {
@@ -1827,6 +1845,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     state = makeBlankState(currentPuzzle.grid);
     seconds = 0;
     startedAt = Date.now();
+    timerStopped = false;
     localStorage.removeItem(storageKey());
     els.message.className = "message";
     els.message.textContent = text.restart;
@@ -1839,6 +1858,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     state = makeBlankState(currentPuzzle.grid);
     seconds = 0;
     startedAt = Date.now();
+    timerStopped = false;
     loadProgress();
     els.puzzleSelect.value = currentPuzzle.id;
     els.reviewPuzzleSelect.value = currentPuzzle.id;
@@ -1952,7 +1972,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function tick() {
-    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const elapsed = timerStopped ? 0 : Math.floor((Date.now() - startedAt) / 1000);
     const total = seconds + elapsed;
     const minutes = String(Math.floor(total / 60)).padStart(2, "0");
     const secs = String(total % 60).padStart(2, "0");
@@ -2055,18 +2075,20 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function renderSessions() {
-    els.sessionList.innerHTML = "";
-    els.sessionPreview.innerHTML = "";
-
     if (!loadedSessions.length) {
       els.reviewSummary.textContent = text.noSessions;
-      els.sessionList.innerHTML = `<div class="empty">${text.noSessions}</div>`;
+      els.sessionList.replaceChildren(Object.assign(document.createElement("div"), {
+        className: "empty",
+        textContent: text.noSessions
+      }));
+      els.sessionPreview.innerHTML = "";
       return;
     }
 
     const submittedCount = loadedSessions.filter((session) => session.submitted).length;
     const solvedCount = loadedSessions.filter((session) => session.solved).length;
     els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c / \uc815\ub2f5 ${solvedCount}\uac1c`;
+    const fragment = document.createDocumentFragment();
     loadedSessions.forEach((session, index) => {
       const stats = sessionStats(session);
       const button = document.createElement("button");
@@ -2084,10 +2106,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       if (formatUpdatedAt(session.updatedAt)) appendBadge(meta, formatUpdatedAt(session.updatedAt));
       button.appendChild(name);
       button.appendChild(meta);
+      button.appendChild(renderMiniGrid(session.state, { className: "session-thumb", minCell: 2, maxCell: 7 }));
       button.addEventListener("click", () => renderSessionPreview(session));
-      els.sessionList.appendChild(button);
+      fragment.appendChild(button);
       if (index === 0) renderSessionPreview(session);
     });
+    els.sessionList.replaceChildren(fragment);
   }
 
   function renderSessionPreview(session) {
@@ -2277,20 +2301,25 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function combinePieceSessions() {
     const parent = puzzles.find((puzzle) => puzzle.id === els.combineParentSelect.value) || currentPuzzle;
     const pieces = puzzles.filter((puzzle) => puzzle.parentId === parent.id && puzzle.piece);
-    combinedPieceGrid = makeBlankState(parent.grid);
-    els.combinedPiecePreview.innerHTML = "";
+    const nextCombinedGrid = makeBlankState(parent.grid);
 
     if (!pieces.length) {
       els.combinePieceSummary.textContent = "\uba3c\uc800 \uc6d0\ubcf8 \ud37c\uc990\uc744 \uc870\uac01\uc73c\ub85c \ucd94\uac00\ud558\uc138\uc694.";
+      els.combinedPiecePreview.innerHTML = "";
+      combinedPieceGrid = null;
       return;
     }
 
     let filledPieces = 0;
     const used = [];
+    const missing = [];
     for (const piecePuzzle of pieces) {
       const sessions = await loadSessionsForPuzzleId(piecePuzzle.id);
       const session = sessions.find((item) => item.submitted) || null;
-      if (!session) continue;
+      if (!session) {
+        missing.push(piecePuzzle.title);
+        continue;
+      }
       filledPieces += 1;
       used.push(`${piecePuzzle.title}: ${session.studentName || "guest"}`);
       const piece = piecePuzzle.piece;
@@ -2298,8 +2327,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         row.forEach((value, colIndex) => {
           const targetRow = piece.startRow + rowIndex;
           const targetCol = piece.startCol + colIndex;
-          if (targetRow < combinedPieceGrid.length && targetCol < combinedPieceGrid[0].length) {
-            combinedPieceGrid[targetRow][targetCol] = value === 1 ? 1 : 0;
+          if (targetRow < nextCombinedGrid.length && targetCol < nextCombinedGrid[0].length) {
+            nextCombinedGrid[targetRow][targetCol] = value === 1 ? 1 : 0;
           }
         });
       });
@@ -2308,18 +2337,22 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (!filledPieces) {
       els.combinePieceSummary.textContent = text.noSessions;
       combinedPieceGrid = null;
+      els.combinedPiecePreview.innerHTML = "";
       return;
     }
 
+    combinedPieceGrid = nextCombinedGrid;
+    const fragment = document.createDocumentFragment();
     const title = document.createElement("h3");
-    title.textContent = `${parent.title} combined`;
-    els.combinedPiecePreview.appendChild(title);
-    els.combinedPiecePreview.appendChild(renderMiniGrid(combinedPieceGrid, { interactive: false }));
+    title.textContent = `${parent.title} \uc870\uac01 \ud569\uce58\uae30`;
+    fragment.appendChild(title);
+    fragment.appendChild(renderMiniGrid(combinedPieceGrid, { interactive: false }));
     const usedList = document.createElement("div");
     usedList.className = "summary";
     usedList.textContent = used.join(" / ");
-    els.combinedPiecePreview.appendChild(usedList);
-    els.combinePieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \uc911 ${filledPieces}\uac1c\uc758 \ud559\uc0dd \ud480\uc774\ub97c \uc6d0\ub798 \uc704\uce58\uc5d0 \ubd99\uc600\uc2b5\ub2c8\ub2e4.`;
+    fragment.appendChild(usedList);
+    els.combinedPiecePreview.replaceChildren(fragment);
+    els.combinePieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \uc911 ${filledPieces}\uac1c \uc81c\ucd9c \ud655\uc778, ${missing.length}\uac1c \ubbf8\uc81c\ucd9c\uc785\ub2c8\ub2e4.`;
   }
 
   async function savePuzzleFromGrid(grid, title, options) {
@@ -2358,11 +2391,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     setSaveStatus(text.savedPuzzle, "online");
   }
 
-  function renderMiniGrid(grid) {
+  function renderMiniGrid(grid, options) {
+    const config = options || {};
     const wrap = document.createElement("div");
-    wrap.className = "mini-grid";
+    wrap.className = ["mini-grid", config.className].filter(Boolean).join(" ");
     const size = cellSizeFor(grid);
-    wrap.style.setProperty("--cell-size", `${Math.max(10, Math.min(22, size))}px`);
+    const minCell = config.minCell || 10;
+    const maxCell = config.maxCell || 22;
+    wrap.style.setProperty("--cell-size", `${Math.max(minCell, Math.min(maxCell, size))}px`);
     wrap.style.gridTemplateColumns = `repeat(${grid[0].length}, var(--cell-size))`;
     grid.forEach((row) => {
       row.forEach((value) => {
@@ -2608,6 +2644,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       state = makeBlankState(currentPuzzle.grid);
       seconds = 0;
       startedAt = Date.now();
+      timerStopped = false;
       loadProgress();
       renderBoard();
     });
@@ -2633,7 +2670,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.saveConvertedBtn.addEventListener("click", () => savePuzzleFromGrid(convertedGrid, els.convertedPuzzleTitle.value.trim() || "\uc774\ubbf8\uc9c0 \ud37c\uc990"));
 
     window.addEventListener("beforeunload", () => {
-      seconds += Math.floor((Date.now() - startedAt) / 1000);
+      if (!timerStopped) seconds += Math.floor((Date.now() - startedAt) / 1000);
       saveProgress(false);
     });
     window.addEventListener("pointerup", finishCellDrag);
@@ -2651,6 +2688,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       hydratePuzzleSelects();
     }
     state = makeBlankState(currentPuzzle.grid);
+    timerStopped = false;
     loadProgress();
     applyMode();
     renderBoard();
