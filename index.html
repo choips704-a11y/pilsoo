@@ -766,7 +766,7 @@ code {
             <button id="deletePiecesBtn" class="danger" type="button">&#51060; &#50896;&#48376;&#51032; &#51312;&#44033; &#49325;&#51228;</button>
             <button id="deleteAllPiecesBtn" class="danger" type="button">&#47784;&#46304; &#51312;&#44033; &#49325;&#51228;</button>
           </div>
-          <div id="pieceSummary" class="summary">60x60&#51012; 10x10&#51004;&#47196; &#45208;&#45572;&#47732; 36&#44060; &#51312;&#44033;&#51060; &#49373;&#49457;&#46121;&#45768;&#45796;.</div>
+          <div id="pieceSummary" class="summary">100x100&#51012; 10x10&#51004;&#47196; &#45208;&#45572;&#47732; 100&#44060; &#51312;&#44033;&#51060; &#49373;&#49457;&#46121;&#45768;&#45796;.</div>
 
           <h2 class="section-title">&#51312;&#44033; &#44208;&#44284; &#48537;&#51060;&#44592;</h2>
           <label class="field">
@@ -797,11 +797,11 @@ code {
           <div class="dual-fields">
             <label class="field">
               <span>&#44032;&#47196; &#52856;</span>
-              <input id="gridWidth" type="number" min="5" max="60" value="20">
+              <input id="gridWidth" type="number" min="5" max="100" value="20">
             </label>
             <label class="field">
               <span>&#49464;&#47196; &#52856;</span>
-              <input id="gridHeight" type="number" min="5" max="60" value="20">
+              <input id="gridHeight" type="number" min="5" max="100" value="20">
             </label>
           </div>
           <label class="field">
@@ -820,7 +820,7 @@ code {
             <button id="convertBtn" type="button">&#48320;&#54872;</button>
             <button id="saveConvertedBtn" class="secondary" type="button">&#54140;&#51600;&#47196; &#52628;&#44032;</button>
           </div>
-          <div id="convertSummary" class="summary">60x60&#44620;&#51648; &#48320;&#54872;&#54624; &#49688; &#51080;&#49845;&#45768;&#45796;.</div>
+          <div id="convertSummary" class="summary">100x100&#44620;&#51648; &#48320;&#54872;&#54624; &#49688; &#51080;&#49845;&#45768;&#45796;.</div>
         </aside>
         <section class="panel wide">
           <canvas id="imageCanvas" class="source-canvas"></canvas>
@@ -1155,7 +1155,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function clampGridSize(value) {
-    return Math.max(5, Math.min(60, Number(value) || 20));
+    return Math.max(5, Math.min(100, Number(value) || 20));
   }
 
   function normalizeGrid(grid) {
