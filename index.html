@@ -1080,7 +1080,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-3";
+  const APP_VERSION = "2026-07-09-qr-cache-4";
   let db = null;
   let puzzles = builtInPuzzles.slice();
   let currentPuzzle = puzzles[0];
@@ -1096,6 +1096,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let combinedPieceGrid = null;
   let uploadedImage = null;
   let liveRefreshBusy = false;
+  let unsubscribePuzzles = null;
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
   let teacherMode = params.get("teacher") === "1" || localStorage.getItem("nonogramTeacherMode") === "1";
@@ -1261,35 +1262,58 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return builtInPuzzles.some((puzzle) => puzzle.id === puzzleId);
   }
 
-  async function loadPuzzles() {
+  function puzzleFromDoc(doc) {
+    const data = doc.data();
+    if (!data || !Array.isArray(data.grid)) return null;
+    return {
+      id: doc.id,
+      title: data.title || doc.id,
+      grid: normalizeGrid(data.grid),
+      parentId: data.parentId || null,
+      parentTitle: data.parentTitle || "",
+      piece: data.piece || null
+    };
+  }
+
+  function applyPuzzleList(remotePuzzles) {
     const custom = localCustomPuzzles();
     const byId = new Map();
     builtInPuzzles.concat(custom).forEach((puzzle) => byId.set(puzzle.id, puzzle));
+    (remotePuzzles || []).forEach((puzzle) => byId.set(puzzle.id, puzzle));
 
+    const previousId = currentPuzzle ? currentPuzzle.id : "";
+    puzzles = Array.from(byId.values());
+    currentPuzzle = puzzles.find((puzzle) => puzzle.id === previousId) || puzzles[0];
+    hydratePuzzleSelects();
+  }
+
+  async function loadPuzzles() {
     if (db) {
       try {
         const snapshot = await db.collection("nonogramPuzzles").get();
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data && Array.isArray(data.grid)) {
-            byId.set(doc.id, {
-              id: doc.id,
-              title: data.title || doc.id,
-              grid: normalizeGrid(data.grid),
-              parentId: data.parentId || null,
-              parentTitle: data.parentTitle || "",
-              piece: data.piece || null
-            });
-          }
-        });
+        applyPuzzleList(snapshot.docs.map(puzzleFromDoc).filter(Boolean));
+        return;
       } catch (error) {
         console.warn(error);
       }
     }
 
-    puzzles = Array.from(byId.values());
-    currentPuzzle = puzzles.find((puzzle) => puzzle.id === currentPuzzle.id) || puzzles[0];
-    hydratePuzzleSelects();
+    applyPuzzleList([]);
+  }
+
+  function startPuzzleLiveSync() {
+    if (!db || unsubscribePuzzles) return;
+    unsubscribePuzzles = db.collection("nonogramPuzzles").onSnapshot((snapshot) => {
+      const beforeId = currentPuzzle ? currentPuzzle.id : "";
+      applyPuzzleList(snapshot.docs.map(puzzleFromDoc).filter(Boolean));
+      if (currentPuzzle && currentPuzzle.id !== beforeId) {
+        state = makeBlankState(currentPuzzle.grid);
+        seconds = 0;
+        startedAt = Date.now();
+      }
+      renderBoard();
+      liveRefreshTeacherViews();
+    }, (error) => console.warn(error));
   }
 
   function hydratePuzzleSelects() {
@@ -1308,9 +1332,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     });
 
     hydrateParentSelect();
-    if (assignedPuzzleId && puzzles.some((puzzle) => puzzle.id === assignedPuzzleId)) {
-      currentPuzzle = puzzles.find((puzzle) => puzzle.id === assignedPuzzleId);
-    }
     els.puzzleSelect.value = currentPuzzle.id;
     els.reviewPuzzleSelect.value = currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
@@ -2436,11 +2457,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     await loadPuzzles();
     if (assignedPuzzleId && puzzles.some((puzzle) => puzzle.id === assignedPuzzleId)) {
       currentPuzzle = puzzles.find((puzzle) => puzzle.id === assignedPuzzleId);
+      hydratePuzzleSelects();
     }
     state = makeBlankState(currentPuzzle.grid);
     loadProgress();
     applyMode();
     renderBoard();
+    startPuzzleLiveSync();
     window.setInterval(tick, 1000);
     tick();
   }
