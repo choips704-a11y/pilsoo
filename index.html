@@ -395,6 +395,8 @@ button.danger:hover {
   border-radius: 0;
   padding: 0;
   background: transparent;
+  touch-action: none;
+  user-select: none;
 }
 
 .cell.filled button {
@@ -1080,7 +1082,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-4";
+  const APP_VERSION = "2026-07-09-qr-cache-5";
   let db = null;
   let puzzles = builtInPuzzles.slice();
   let currentPuzzle = puzzles[0];
@@ -1097,6 +1099,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let uploadedImage = null;
   let liveRefreshBusy = false;
   let unsubscribePuzzles = null;
+  let dragPaint = null;
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
   let teacherMode = params.get("teacher") === "1" || localStorage.getItem("nonogramTeacherMode") === "1";
@@ -1409,7 +1412,16 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         const button = document.createElement("button");
         button.type = "button";
         button.setAttribute("aria-label", `row ${row + 1}, column ${col + 1}`);
-        button.addEventListener("click", () => updateCell(row, col));
+        button.addEventListener("pointerdown", (event) => startCellDrag(event, row, col));
+        button.addEventListener("pointermove", dragMoveCell);
+        button.addEventListener("pointerenter", () => dragOverCell(row, col));
+        button.addEventListener("click", (event) => {
+          if (dragPaint && dragPaint.handledClick) {
+            event.preventDefault();
+            return;
+          }
+          updateCell(row, col);
+        });
         cell.appendChild(button);
         els.board.appendChild(cell);
       }
@@ -1418,10 +1430,77 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     updateStats();
   }
 
+  function targetValueForCell(row, col) {
+    if (tool === "paint") return state[row][col] === 1 ? 0 : 1;
+    if (tool === "mark") return state[row][col] === 2 ? 0 : 2;
+    return 0;
+  }
+
+  function paintCell(row, col, value) {
+    if (!state[row] || typeof state[row][col] === "undefined") return false;
+    if (state[row][col] === value) return false;
+    state[row][col] = value;
+    const cell = els.board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    if (cell) {
+      cell.classList.toggle("filled", value === 1);
+      cell.classList.toggle("marked", value === 2);
+      cell.classList.remove("wrong");
+    }
+    return true;
+  }
+
+  function startCellDrag(event, row, col) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    const value = targetValueForCell(row, col);
+    dragPaint = {
+      active: true,
+      handledClick: true,
+      value,
+      visited: new Set()
+    };
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    applyDragCell(row, col);
+  }
+
+  function applyDragCell(row, col) {
+    if (!dragPaint || !dragPaint.active) return;
+    const key = `${row}:${col}`;
+    if (dragPaint.visited.has(key)) return;
+    dragPaint.visited.add(key);
+    if (paintCell(row, col, dragPaint.value)) {
+      els.message.className = "message";
+      els.message.textContent = text.progressSaved;
+      updateStats();
+    }
+  }
+
+  function dragOverCell(row, col) {
+    applyDragCell(row, col);
+  }
+
+  function dragMoveCell(event) {
+    if (!dragPaint || !dragPaint.active) return;
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = target ? target.closest(".cell") : null;
+    if (!cell) return;
+    applyDragCell(Number(cell.dataset.row), Number(cell.dataset.col));
+  }
+
+  function finishCellDrag() {
+    if (!dragPaint || !dragPaint.active) return;
+    dragPaint.active = false;
+    renderBoard();
+    queueSave();
+    window.setTimeout(() => {
+      dragPaint = null;
+    }, 150);
+  }
+
   function updateCell(row, col) {
-    if (tool === "paint") state[row][col] = state[row][col] === 1 ? 0 : 1;
-    if (tool === "mark") state[row][col] = state[row][col] === 2 ? 0 : 2;
-    if (tool === "erase") state[row][col] = 0;
+    paintCell(row, col, targetValueForCell(row, col));
     els.message.className = "message";
     els.message.textContent = text.progressSaved;
     renderBoard();
@@ -2447,6 +2526,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       seconds += Math.floor((Date.now() - startedAt) / 1000);
       saveProgress(false);
     });
+    window.addEventListener("pointerup", finishCellDrag);
+    window.addEventListener("pointercancel", finishCellDrag);
     window.addEventListener("resize", renderBoard);
     window.setInterval(liveRefreshTeacherViews, 3500);
   }
