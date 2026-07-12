@@ -549,6 +549,27 @@ code {
   color: var(--warn);
 }
 
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.group-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.group-card .summary {
+  margin-top: 0;
+}
+
 .session-detail {
   display: grid;
   gap: 10px;
@@ -705,6 +726,10 @@ code {
   .status-strip {
     justify-content: start;
   }
+
+  .group-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 </style>
@@ -732,6 +757,7 @@ code {
     <nav class="tabs" aria-label="main tabs">
       <button class="tab active" data-tab="play" type="button">&#54400;&#44592;</button>
       <button class="tab teacher-only" data-tab="review" type="button">&#54869;&#51064;</button>
+      <button class="tab teacher-only" data-tab="groups" type="button">&#51312;&#48324;</button>
       <button class="tab teacher-only" data-tab="merge" type="button">&#54633;&#52824;&#44592;</button>
       <button class="tab teacher-only" data-tab="pieces" type="button">&#51312;&#44033;</button>
       <button class="tab teacher-only" data-tab="convert" type="button">&#51060;&#48120;&#51648; &#48320;&#54872;</button>
@@ -743,6 +769,18 @@ code {
           <label class="field">
             <span>&#54617;&#49373; &#51060;&#47492;</span>
             <input id="studentName" type="text" autocomplete="name" placeholder="&#51060;&#47492; &#51077;&#47141;">
+          </label>
+
+          <label class="field">
+            <span>&#51312;</span>
+            <select id="groupSelect">
+              <option value="1">1&#51312;</option>
+              <option value="2">2&#51312;</option>
+              <option value="3">3&#51312;</option>
+              <option value="4">4&#51312;</option>
+              <option value="5">5&#51312;</option>
+              <option value="6">6&#51312;</option>
+            </select>
           </label>
 
           <label class="field">
@@ -783,6 +821,7 @@ code {
         <section class="board-wrap" aria-label="nonogram board">
           <div id="message" class="message">&#54140;&#51600;&#51012; &#49440;&#53469;&#54616;&#44256; &#52856;&#51012; &#52292;&#50892;&#48372;&#49464;&#50836;.</div>
           <div id="board" class="board"></div>
+          <div id="myGroupPreview" class="preview-box"></div>
         </section>
 
         <aside class="panel teacher teacher-only" aria-label="firebase setup">
@@ -820,6 +859,23 @@ code {
         <section class="panel wide">
           <div id="sessionList" class="session-list"></div>
           <div id="sessionPreview" class="preview-box"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="groupsTab" class="tab-panel">
+      <section class="workspace-grid">
+        <aside class="panel">
+          <h2>&#51312;&#48324; &#49892;&#49884;&#44036; &#54869;&#51064;</h2>
+          <label class="field">
+            <span>&#50896;&#48376; &#54140;&#51600;</span>
+            <select id="groupPuzzleSelect"></select>
+          </label>
+          <button id="loadGroupsBtn" type="button">&#51312;&#48324; &#49352;&#47196;&#44256;&#52840;</button>
+          <div id="groupSummary" class="summary">1&#51312;&#48512;&#53552; 6&#51312;&#44620;&#51648; &#54620; &#54868;&#47732;&#50640; &#48372;&#50668;&#51469;&#45768;&#45796;.</div>
+        </aside>
+        <section class="panel wide">
+          <div id="groupBoards" class="group-grid"></div>
         </section>
       </section>
     </section>
@@ -1108,6 +1164,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     combinePieceSummary: document.getElementById("combinePieceSummary"),
     combinedPiecePreview: document.getElementById("combinedPiecePreview"),
     studentName: document.getElementById("studentName"),
+    groupSelect: document.getElementById("groupSelect"),
+    myGroupPreview: document.getElementById("myGroupPreview"),
+    groupPuzzleSelect: document.getElementById("groupPuzzleSelect"),
+    loadGroupsBtn: document.getElementById("loadGroupsBtn"),
+    groupSummary: document.getElementById("groupSummary"),
+    groupBoards: document.getElementById("groupBoards"),
     startLessonBtn: document.getElementById("startLessonBtn"),
     closeLessonBtn: document.getElementById("closeLessonBtn"),
     lessonStatus: document.getElementById("lessonStatus"),
@@ -1157,7 +1219,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-12-delete-results-1";
+  const APP_VERSION = "2026-07-12-group-view-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1178,6 +1240,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let liveRefreshBusy = false;
   let unsubscribePuzzles = null;
   let unsubscribeSessions = null;
+  let unsubscribeGroupPreview = null;
   let unsubscribeLesson = null;
   let lessonState = { open: true, puzzleId: "", title: "" };
   let assignedByLesson = false;
@@ -1463,8 +1526,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const pieces = piecesForParent(lessonState.puzzleId);
     if (!pieces.length) return parent || null;
     const name = els.studentName.value.trim();
+    const group = els.groupSelect.value || "1";
     if (!name) return parent || pieces[0];
-    return pieces[hashText(`${name}:${studentKey()}`) % pieces.length];
+    return pieces[hashText(`${group}:${name}:${studentKey()}`) % pieces.length];
   }
 
   function applyLessonState() {
@@ -1494,6 +1558,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         assignedByLesson = false;
       }
     }
+    startMyGroupPreviewSync();
   }
 
   async function startLesson() {
@@ -1712,7 +1777,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function hydratePuzzleSelects() {
-    [els.puzzleSelect, els.reviewPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
+    [els.puzzleSelect, els.reviewPuzzleSelect, els.groupPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
       const selected = select.value;
       select.innerHTML = "";
       puzzles.forEach((puzzle) => {
@@ -1729,6 +1794,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     hydrateParentSelect();
     els.puzzleSelect.value = currentPuzzle.id;
     els.reviewPuzzleSelect.value = currentPuzzle.id;
+    els.groupPuzzleSelect.value = currentPuzzle.parentId || currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
     els.splitPuzzleSelect.value = currentPuzzle.id;
   }
@@ -2028,12 +2094,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function storageKey() {
     const name = (els.studentName.value || "guest").trim().replace(/\s+/g, "_");
-    return `nonogram:${name}:${currentPuzzle.id}`;
+    const group = els.groupSelect.value || "1";
+    return `nonogram:${group}:${name}:${currentPuzzle.id}`;
   }
 
   function sessionDocId() {
     const name = (els.studentName.value || "guest").trim().replace(/[^\w-]+/g, "_");
-    return `${name || "guest"}_${currentPuzzle.id}`;
+    const group = (els.groupSelect.value || "1").replace(/[^\w-]+/g, "_");
+    return `group${group}_${name || "guest"}_${currentPuzzle.id}`;
   }
 
   function localSessionIndex() {
@@ -2086,7 +2154,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         const data = JSON.parse(raw);
         const sameStudent = (data.studentName || "guest") === (session.studentName || "guest");
         const samePuzzle = data.puzzleId === session.puzzleId;
-        if (sameStudent && samePuzzle) {
+        const sameGroup = (data.groupName || "1") === (session.groupName || "1");
+        if (sameStudent && samePuzzle && sameGroup) {
           localStorage.removeItem(key);
         } else {
           nextIndex.push(key);
@@ -2179,8 +2248,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       wasSubmitted = false;
     }
     const submitted = Object.prototype.hasOwnProperty.call(meta, "submitted") ? Boolean(meta.submitted) : wasSubmitted;
-    const payload = {
+      const payload = {
       studentName: els.studentName.value.trim() || "guest",
+      groupName: els.groupSelect.value || "1",
       puzzleId: currentPuzzle.id,
       puzzleTitle: currentPuzzle.title,
       parentId: currentPuzzle.parentId || null,
@@ -2380,8 +2450,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.timer.textContent = `${minutes}:${secs}`;
   }
 
-  function reviewPuzzleIds() {
-    const selectedPuzzleId = els.reviewPuzzleSelect.value || els.mergePuzzleSelect.value;
+  function reviewPuzzleIds(basePuzzleId) {
+    const selectedPuzzleId = basePuzzleId || els.reviewPuzzleSelect.value || els.mergePuzzleSelect.value;
     const ids = new Set([selectedPuzzleId]);
     puzzles.forEach((puzzle) => {
       if (puzzle.parentId === selectedPuzzleId) ids.add(puzzle.id);
@@ -2432,7 +2502,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function mergeLocalAndRemoteSessions(remoteSessions) {
-    const targetSet = new Set(reviewPuzzleIds());
+    const targetSet = new Set(reviewPuzzleIds(activeTabName() === "groups" ? selectedGroupParentId() : null));
     const sessions = [];
     const byDocId = new Set();
 
@@ -2465,12 +2535,35 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       unsubscribeSessions();
       unsubscribeSessions = null;
     }
-    const targetIds = reviewPuzzleIds();
+    const tabName = activeTabName();
+    const targetIds = reviewPuzzleIds(tabName === "groups" ? selectedGroupParentId() : null);
     if (!sharedStoreReady() || !targetIds.length) return;
     unsubscribeSessions = subscribeRemoteSessionsForPuzzleGroup(targetIds, (sessions) => {
       mergeLocalAndRemoteSessions(sessions);
       if (activeTabName() === "merge") mergeSessions();
+      if (activeTabName() === "groups") renderGroupBoards();
     }, (error) => console.warn(error));
+  }
+
+  function startMyGroupPreviewSync() {
+    if (unsubscribeGroupPreview) {
+      unsubscribeGroupPreview();
+      unsubscribeGroupPreview = null;
+    }
+    if (teacherMode || !sharedStoreReady() || !lessonState.puzzleId) {
+      renderMyGroupPreview([]);
+      return;
+    }
+    unsubscribeGroupPreview = subscribeRemoteSessionsForPuzzleGroup(reviewPuzzleIds(lessonState.puzzleId), (sessions) => {
+      renderMyGroupPreview(sessions);
+    }, (error) => console.warn(error));
+  }
+
+  async function loadGroupSessions() {
+    els.reviewPuzzleSelect.value = selectedGroupParentId();
+    await loadSessions();
+    renderGroupBoards();
+    startSessionLiveSync();
   }
 
   function sortSessions(a, b) {
@@ -2559,6 +2652,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       name.textContent = session.studentName || "guest";
       const meta = document.createElement("div");
       meta.className = "session-meta";
+      appendBadge(meta, `${session.groupName || "1"}\uc870`);
       appendBadge(meta, session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911", session.submitted ? "good" : "");
       appendBadge(meta, session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc", session.solved ? "good" : "warn");
       if (session.piece) appendBadge(meta, `${session.piece.row}-${session.piece.col}`);
@@ -2596,7 +2690,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const fragment = document.createDocumentFragment();
     const header = document.createElement("div");
     header.className = "progress-row header";
-    ["\uc774\ub984", "\uc0c1\ud0dc", "\uc9c4\ud589\ub960", "\uc2dc\uac04"].forEach((label) => {
+    ["\uc774\ub984", "\uc870", "\uc0c1\ud0dc", "\uc9c4\ud589"].forEach((label) => {
       const cell = document.createElement("span");
       cell.textContent = label;
       header.appendChild(cell);
@@ -2610,11 +2704,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       const name = document.createElement("strong");
       name.textContent = session.studentName || "guest";
       const status = document.createElement("span");
-      status.textContent = session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589";
+      status.textContent = `${session.groupName || "1"}\uc870`;
       const progress = document.createElement("span");
-      progress.textContent = `${stats.fillRate}%`;
+      progress.textContent = session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589";
       const time = document.createElement("span");
-      time.textContent = formatDuration(session.seconds);
+      time.textContent = `${stats.fillRate}%`;
       [name, status, progress, time].forEach((cell) => row.appendChild(cell));
       fragment.appendChild(row);
     });
@@ -2642,6 +2736,88 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     detail.appendChild(summary);
     els.sessionPreview.appendChild(detail);
     els.sessionPreview.appendChild(renderMiniGrid(session.state, { interactive: false }));
+  }
+
+  function selectedGroupParentId() {
+    return els.groupPuzzleSelect.value || lessonState.puzzleId || currentPuzzle.parentId || currentPuzzle.id;
+  }
+
+  function combineGroupGrid(parent, groupName, sessions) {
+    const pieces = piecesForParent(parent.id);
+    const grid = makeBlankState(parent.grid);
+    let filledPieces = 0;
+    const used = [];
+
+    pieces.forEach((piecePuzzle) => {
+      const session = sessions.find((item) => {
+        return item.submitted &&
+          String(item.groupName || "1") === String(groupName) &&
+          item.puzzleId === piecePuzzle.id &&
+          Array.isArray(item.state);
+      });
+      if (!session) return;
+      filledPieces += 1;
+      used.push(session.studentName || "guest");
+      const piece = piecePuzzle.piece;
+      session.state.forEach((row, rowIndex) => {
+        row.forEach((value, colIndex) => {
+          const targetRow = piece.startRow + rowIndex;
+          const targetCol = piece.startCol + colIndex;
+          if (targetRow < grid.length && targetCol < grid[0].length) {
+            grid[targetRow][targetCol] = value === 1 ? 1 : 0;
+          }
+        });
+      });
+    });
+
+    return { grid, filledPieces, totalPieces: pieces.length, used };
+  }
+
+  function renderGroupBoards() {
+    const parent = puzzles.find((puzzle) => puzzle.id === selectedGroupParentId()) || currentPuzzle;
+    const fragment = document.createDocumentFragment();
+    for (let index = 1; index <= 6; index += 1) {
+      const groupName = String(index);
+      const result = combineGroupGrid(parent, groupName, loadedSessions);
+      const card = document.createElement("div");
+      card.className = "group-card";
+      const title = document.createElement("h3");
+      title.textContent = `${groupName}\uc870`;
+      const summary = document.createElement("div");
+      summary.className = "summary";
+      summary.textContent = result.totalPieces
+        ? `${result.filledPieces}/${result.totalPieces}\uac1c \uc870\uac01 \uc81c\ucd9c`
+        : "\uba3c\uc800 \uc870\uac01 \ud37c\uc990\uc744 \ucd94\uac00\ud558\uc138\uc694.";
+      card.appendChild(title);
+      card.appendChild(renderMiniGrid(result.grid, { className: "session-thumb", minCell: 2, maxCell: 8 }));
+      card.appendChild(summary);
+      fragment.appendChild(card);
+    }
+    els.groupBoards.replaceChildren(fragment);
+    els.groupSummary.textContent = `${parent.title} - 1\uc870\ubd80\ud130 6\uc870\uae4c\uc9c0 \uc2e4\uc2dc\uac04 \ud655\uc778 \uc911`;
+  }
+
+  function renderMyGroupPreview(sessions) {
+    if (teacherMode || !lessonState.puzzleId) {
+      els.myGroupPreview.innerHTML = "";
+      return;
+    }
+    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
+    if (!parent || !piecesForParent(parent.id).length) {
+      els.myGroupPreview.innerHTML = "";
+      return;
+    }
+    const result = combineGroupGrid(parent, els.groupSelect.value || "1", sessions || []);
+    const fragment = document.createDocumentFragment();
+    const title = document.createElement("h3");
+    title.textContent = `\uc6b0\ub9ac ${els.groupSelect.value || "1"}\uc870 \uc644\uc131 \uadf8\ub9bc`;
+    const summary = document.createElement("div");
+    summary.className = "summary";
+    summary.textContent = `${result.filledPieces}/${result.totalPieces}\uac1c \uc870\uac01 \uc81c\ucd9c`;
+    fragment.appendChild(title);
+    fragment.appendChild(renderMiniGrid(result.grid, { minCell: 3, maxCell: 10 }));
+    fragment.appendChild(summary);
+    els.myGroupPreview.replaceChildren(fragment);
   }
 
   function mergeSessions() {
@@ -3098,11 +3274,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function liveRefreshTeacherViews() {
     if (!teacherMode || liveRefreshBusy) return;
     const tabName = activeTabName();
-    if (!["review", "merge", "pieces"].includes(tabName)) return;
+    if (!["review", "groups", "merge", "pieces"].includes(tabName)) return;
     liveRefreshBusy = true;
     try {
       if (tabName === "review") {
         await loadSessions();
+      } else if (tabName === "groups") {
+        await loadGroupSessions();
       } else if (tabName === "merge") {
         els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
         await loadSessions();
@@ -3139,9 +3317,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.puzzleSelect.addEventListener("change", (event) => changePuzzle(event.target.value));
     els.reviewPuzzleSelect.addEventListener("change", () => {
       els.mergePuzzleSelect.value = els.reviewPuzzleSelect.value;
+      els.groupPuzzleSelect.value = els.reviewPuzzleSelect.value;
       loadSessions();
       startSessionLiveSync();
     });
+    els.groupPuzzleSelect.addEventListener("change", loadGroupSessions);
     els.mergePuzzleSelect.addEventListener("change", () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
       loadSessions();
@@ -3169,7 +3349,19 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       window.clearTimeout(nameAssignTimer);
       nameAssignTimer = window.setTimeout(applyLessonState, 350);
     });
+    els.groupSelect.addEventListener("change", () => {
+      state = makeBlankState(currentPuzzle.grid);
+      seconds = 0;
+      startedAt = Date.now();
+      timerStopped = false;
+      hintUsed = false;
+      loadProgress();
+      renderBoard();
+      applyLessonState();
+      startMyGroupPreviewSync();
+    });
     els.loadSessionsBtn.addEventListener("click", loadSessions);
+    els.loadGroupsBtn.addEventListener("click", loadGroupSessions);
     els.deleteVisibleSessionsBtn.addEventListener("click", deleteVisibleSessions);
     els.mergeBtn.addEventListener("click", async () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
