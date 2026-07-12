@@ -85,6 +85,16 @@ h3 {
   align-items: center;
 }
 
+.lesson-controls {
+  display: none;
+}
+
+body.teacher-mode .lesson-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -479,6 +489,37 @@ code {
   overflow: hidden;
 }
 
+.progress-table {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.progress-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 76px 76px 76px;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress-row strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.progress-row.header {
+  background: var(--soft);
+  color: var(--ink);
+}
+
 .session-badge {
   display: inline-flex;
   align-items: center;
@@ -672,8 +713,13 @@ code {
         <h1>&#45432;&#45432;&#44536;&#47016; &#54876;&#46041;</h1>
       </div>
       <div class="status-strip">
+        <div class="lesson-controls">
+          <button id="startLessonBtn" type="button">&#49688;&#50629; &#49884;&#51089;</button>
+          <button id="closeLessonBtn" class="danger" type="button">&#49688;&#50629; &#47560;&#44048;</button>
+        </div>
         <button id="shareQrBtn" class="secondary" type="button">QR &#51077;&#51109;</button>
         <button id="teacherModeBtn" class="secondary" type="button">&#44368;&#49324; &#47784;&#46300;</button>
+        <span id="lessonStatus" class="pill neutral">&#49688;&#50629; &#45824;&#44592;</span>
         <span id="connectionStatus" class="pill neutral">&#47196;&#52972; &#47784;&#46300;</span>
         <span id="saveStatus" class="pill">&#51200;&#51109; &#45824;&#44592;</span>
       </div>
@@ -722,6 +768,7 @@ code {
 
           <div class="actions">
             <button id="submitBtn" type="button">&#51228;&#52636;</button>
+            <button id="hintBtn" class="secondary" type="button">&#55180;&#53944; 1&#54924;</button>
             <button id="checkBtn" class="teacher-only" type="button">&#51221;&#45813; &#54869;&#51064;</button>
             <button id="resetBtn" class="secondary" type="button">&#45796;&#49884; &#49884;&#51089;</button>
             <button id="deletePuzzleBtn" class="danger teacher-only" type="button">&#49440;&#53469; &#54140;&#51600; &#51648;&#50864;&#44592;</button>
@@ -761,6 +808,7 @@ code {
           </label>
           <button id="loadSessionsBtn" type="button">&#44208;&#44284; &#48520;&#47084;&#50724;&#44592;</button>
           <div class="summary" id="reviewSummary">&#51200;&#51109;&#46108; &#44208;&#44284;&#47484; &#48520;&#47084;&#50724;&#49464;&#50836;.</div>
+          <div id="progressTable" class="progress-table"></div>
         </aside>
         <section class="panel wide">
           <div id="sessionList" class="session-list"></div>
@@ -1053,6 +1101,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     combinePieceSummary: document.getElementById("combinePieceSummary"),
     combinedPiecePreview: document.getElementById("combinedPiecePreview"),
     studentName: document.getElementById("studentName"),
+    startLessonBtn: document.getElementById("startLessonBtn"),
+    closeLessonBtn: document.getElementById("closeLessonBtn"),
+    lessonStatus: document.getElementById("lessonStatus"),
     connectionStatus: document.getElementById("connectionStatus"),
     saveStatus: document.getElementById("saveStatus"),
     shareQrBtn: document.getElementById("shareQrBtn"),
@@ -1069,12 +1120,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     paintTool: document.getElementById("paintTool"),
     markTool: document.getElementById("markTool"),
     submitBtn: document.getElementById("submitBtn"),
+    hintBtn: document.getElementById("hintBtn"),
     checkBtn: document.getElementById("checkBtn"),
     resetBtn: document.getElementById("resetBtn"),
     deletePuzzleBtn: document.getElementById("deletePuzzleBtn"),
     deleteAllGeneratedBtn: document.getElementById("deleteAllGeneratedBtn"),
     loadSessionsBtn: document.getElementById("loadSessionsBtn"),
     reviewSummary: document.getElementById("reviewSummary"),
+    progressTable: document.getElementById("progressTable"),
     sessionList: document.getElementById("sessionList"),
     sessionPreview: document.getElementById("sessionPreview"),
     mergeMode: document.getElementById("mergeMode"),
@@ -1096,7 +1149,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-09-qr-cache-8";
+  const APP_VERSION = "2026-07-12-class-tools-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1106,6 +1159,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let startedAt = Date.now();
   let seconds = 0;
   let timerStopped = false;
+  let hintUsed = false;
   let saveTimer = null;
   let loadedSessions = [];
   let mergedGrid = null;
@@ -1115,6 +1169,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let uploadedImage = null;
   let liveRefreshBusy = false;
   let unsubscribePuzzles = null;
+  let unsubscribeSessions = null;
+  let unsubscribeLesson = null;
+  let lessonState = { open: true, puzzleId: "", title: "" };
+  let assignedByLesson = false;
+  let nameAssignTimer = null;
   let dragPaint = null;
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
@@ -1227,6 +1286,57 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return [];
   }
 
+  function subscribeRemoteSessionsForPuzzle(puzzleId, onSessions, onError) {
+    if (rtdb) {
+      const ref = rtdb.ref("nonogramSessions").orderByChild("puzzleId").equalTo(puzzleId);
+      const handler = (snapshot) => {
+        const sessions = snapshotToList(snapshot).map((item) => ({ id: `firebase:${item.id}`, source: "firebase", ...item.data }));
+        onSessions(sessions.filter((session) => Array.isArray(session.state)));
+      };
+      ref.on("value", handler, onError);
+      return () => ref.off("value", handler);
+    }
+    if (db) {
+      return db.collection("nonogramSessions").where("puzzleId", "==", puzzleId).onSnapshot((snapshot) => {
+        const sessions = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data && Array.isArray(data.state)) sessions.push({ id: `firebase:${doc.id}`, source: "firebase", ...data });
+        });
+        onSessions(sessions);
+      }, onError);
+    }
+    return null;
+  }
+
+  function subscribeRemoteSessionsForPuzzleGroup(puzzleIds, onSessions, onError) {
+    const idSet = new Set(puzzleIds);
+    if (rtdb) {
+      const ref = rtdb.ref("nonogramSessions");
+      const handler = (snapshot) => {
+        const sessions = snapshotToList(snapshot)
+          .map((item) => ({ id: `firebase:${item.id}`, source: "firebase", ...item.data }))
+          .filter((session) => idSet.has(session.puzzleId) && Array.isArray(session.state));
+        onSessions(sessions);
+      };
+      ref.on("value", handler, onError);
+      return () => ref.off("value", handler);
+    }
+    if (db) {
+      return db.collection("nonogramSessions").onSnapshot((snapshot) => {
+        const sessions = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data && idSet.has(data.puzzleId) && Array.isArray(data.state)) {
+            sessions.push({ id: `firebase:${doc.id}`, source: "firebase", ...data });
+          }
+        });
+        onSessions(sessions);
+      }, onError);
+    }
+    return null;
+  }
+
   async function saveRemoteSession(id, payload) {
     if (rtdb) {
       await rtdb.ref(`nonogramSessions/${id}`).update(payload);
@@ -1249,6 +1359,29 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
   }
 
+  async function saveLessonState(payload) {
+    if (rtdb) {
+      await rtdb.ref("nonogramClass/current").update(payload);
+      return;
+    }
+    if (db) {
+      await db.collection("nonogramClass").doc("current").set(payload, { merge: true });
+    }
+  }
+
+  function subscribeLessonState(onLesson, onError) {
+    if (rtdb) {
+      const ref = rtdb.ref("nonogramClass/current");
+      const handler = (snapshot) => onLesson(snapshot.val() || {});
+      ref.on("value", handler, onError);
+      return () => ref.off("value", handler);
+    }
+    if (db) {
+      return db.collection("nonogramClass").doc("current").onSnapshot((doc) => onLesson(doc.exists ? doc.data() : {}), onError);
+    }
+    return null;
+  }
+
   function setConnection(label, type) {
     els.connectionStatus.textContent = label;
     els.connectionStatus.className = "pill " + type;
@@ -1263,10 +1396,122 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const url = new URL(window.location.href.split("#")[0]);
     url.searchParams.delete("teacher");
     url.searchParams.set("v", APP_VERSION);
-    if (teacherMode && currentPuzzle) {
-      url.searchParams.set("puzzle", currentPuzzle.id);
+    const sharePuzzleId = lessonState.open !== false && lessonState.puzzleId ? lessonState.puzzleId : currentPuzzle.id;
+    if (teacherMode && sharePuzzleId) {
+      url.searchParams.set("puzzle", sharePuzzleId);
     }
     return url.toString();
+  }
+
+  function setLessonStatus(label, type) {
+    els.lessonStatus.textContent = label;
+    els.lessonStatus.className = "pill " + (type || "neutral");
+  }
+
+  function lessonOpen() {
+    return teacherMode || lessonState.open !== false;
+  }
+
+  function studentKey() {
+    let key = localStorage.getItem("nonogramStudentKey");
+    if (!key) {
+      key = `student-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem("nonogramStudentKey", key);
+    }
+    return key;
+  }
+
+  function hashText(value) {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function piecesForParent(parentId) {
+    return puzzles
+      .filter((puzzle) => puzzle.parentId === parentId && puzzle.piece)
+      .sort((a, b) => {
+        const ap = a.piece || {};
+        const bp = b.piece || {};
+        return (ap.row - bp.row) || (ap.col - bp.col) || a.title.localeCompare(b.title);
+      });
+  }
+
+  function assignedLessonPuzzle() {
+    if (!lessonState.puzzleId) return null;
+    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
+    const pieces = piecesForParent(lessonState.puzzleId);
+    if (!pieces.length) return parent || null;
+    const name = els.studentName.value.trim();
+    if (!name) return parent || pieces[0];
+    return pieces[hashText(`${name}:${studentKey()}`) % pieces.length];
+  }
+
+  function applyLessonState() {
+    const lessonPuzzle = lessonState.puzzleId ? puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId) : null;
+    if (lessonState.open === false) {
+      setLessonStatus("\uc218\uc5c5 \ub9c8\uac10", "error");
+      if (!teacherMode) {
+        els.message.className = "message error";
+        els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      }
+    } else if (lessonPuzzle) {
+      setLessonStatus(`\uc218\uc5c5 \uc911: ${lessonPuzzle.title}`, "online");
+    } else {
+      setLessonStatus("\uc218\uc5c5 \ub300\uae30", "neutral");
+    }
+
+    els.submitBtn.disabled = !lessonOpen();
+    els.hintBtn.disabled = hintUsed || !lessonOpen();
+
+    if (!teacherMode && lessonState.open !== false && lessonState.puzzleId) {
+      const assigned = assignedLessonPuzzle();
+      if (assigned && assigned.id !== currentPuzzle.id) {
+        assignedByLesson = true;
+        changePuzzle(assigned.id);
+        els.message.className = "message";
+        els.message.textContent = assigned.piece ? `${assigned.title}\uc774 \ubc30\uc815\ub418\uc5c8\uc2b5\ub2c8\ub2e4.` : text.choosePuzzle;
+        assignedByLesson = false;
+      }
+    }
+  }
+
+  async function startLesson() {
+    const parentId = currentPuzzle.parentId || currentPuzzle.id;
+    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
+    lessonState = { open: true, puzzleId: parent.id, title: parent.title };
+    applyLessonState();
+    if (sharedStoreReady()) {
+      await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
+      setSaveStatus("\uc218\uc5c5 \uc2dc\uc791\ub428", "online");
+    } else {
+      setSaveStatus("\ub85c\uceec \uc218\uc5c5 \uc2dc\uc791(\uacf5\uc720 \uc548 \ub428)", "error");
+    }
+  }
+
+  async function closeLesson() {
+    lessonState = { ...lessonState, open: false };
+    applyLessonState();
+    if (sharedStoreReady()) {
+      await saveLessonState({ open: false, updatedAt: serverTimestamp() });
+      setSaveStatus("\uc218\uc5c5 \ub9c8\uac10\ub428", "online");
+    } else {
+      setSaveStatus("\ub85c\uceec \uc218\uc5c5 \ub9c8\uac10", "error");
+    }
+  }
+
+  function startLessonLiveSync() {
+    if (!sharedStoreReady() || unsubscribeLesson) return;
+    unsubscribeLesson = subscribeLessonState((remoteLesson) => {
+      lessonState = {
+        open: remoteLesson.open !== false,
+        puzzleId: remoteLesson.puzzleId || "",
+        title: remoteLesson.title || ""
+      };
+      applyLessonState();
+    }, (error) => console.warn(error));
   }
 
   function openQrDialog() {
@@ -1417,6 +1662,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     puzzles = Array.from(byId.values());
     currentPuzzle = puzzles.find((puzzle) => puzzle.id === previousId) || puzzles[0];
     hydratePuzzleSelects();
+    applyLessonState();
   }
 
   async function loadPuzzles() {
@@ -1578,6 +1824,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function startCellDrag(event, row, col) {
+    if (!lessonOpen()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uce78\uc744 \ubc14\uafc0 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     const value = targetValueForCell(row, col);
@@ -1628,6 +1879,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function updateCell(row, col) {
+    if (!lessonOpen()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uce78\uc744 \ubc14\uafc0 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
     paintCell(row, col, targetValueForCell(row, col));
     els.message.className = "message";
     els.message.textContent = text.progressSaved;
@@ -1680,6 +1936,43 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     saveProgress(solved);
   }
 
+  function useHint() {
+    if (hintUsed) {
+      els.message.className = "message error";
+      els.message.textContent = "\ud78c\ud2b8\ub294 \ud55c \ubc88\ub9cc \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
+    if (!lessonOpen()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \ud78c\ud2b8\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
+
+    const candidates = [];
+    currentPuzzle.grid.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => {
+        if ((value === 1) !== (state[rowIndex][colIndex] === 1)) {
+          candidates.push({ row: rowIndex, col: colIndex, value });
+        }
+      });
+    });
+
+    if (!candidates.length) {
+      els.message.className = "message success";
+      els.message.textContent = "\ud78c\ud2b8\uac00 \ud544\uc694 \uc5c6\uc5b4\uc694. \uc815\ub2f5\uc785\ub2c8\ub2e4.";
+      return;
+    }
+
+    const hint = candidates[0];
+    state[hint.row][hint.col] = hint.value === 1 ? 1 : 2;
+    hintUsed = true;
+    els.hintBtn.disabled = true;
+    els.message.className = "message";
+    els.message.textContent = `${hint.row + 1}\ud589 ${hint.col + 1}\uc5f4 \ud55c \uce78\uc744 \ud78c\ud2b8\ub85c \ud45c\uc2dc\ud588\uc2b5\ub2c8\ub2e4.`;
+    renderBoard();
+    queueSave();
+  }
+
   function isSolved() {
     return currentPuzzle.grid.every((row, rowIndex) => {
       return row.every((value, colIndex) => {
@@ -1690,6 +1983,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   async function submitAnswer() {
     document.querySelectorAll(".cell").forEach((cell) => cell.classList.remove("wrong"));
+    if (!lessonOpen()) {
+      els.message.className = "message error";
+      els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
     if (!els.studentName.value.trim()) {
       els.message.className = "message error";
       els.message.textContent = "\uba3c\uc800 \uc774\ub984\uc744 \uc785\ub825\ud558\uc138\uc694.";
@@ -1794,6 +2092,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       piece: currentPuzzle.piece || null,
       state: state,
       seconds: timerStopped ? seconds : seconds + Math.floor((Date.now() - startedAt) / 1000),
+      hintUsed: hintUsed,
       solved: Boolean(solved),
       width: currentPuzzle.grid[0].length,
       height: currentPuzzle.grid.length,
@@ -1831,6 +2130,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         state = parsed.state;
         seconds = Number(parsed.seconds) || 0;
         timerStopped = Boolean(parsed.submitted);
+        hintUsed = Boolean(parsed.hintUsed);
+        els.hintBtn.disabled = hintUsed || !lessonOpen();
         startedAt = Date.now();
         return true;
       }
@@ -1846,6 +2147,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
+    hintUsed = false;
+    els.hintBtn.disabled = !lessonOpen();
     localStorage.removeItem(storageKey());
     els.message.className = "message";
     els.message.textContent = text.restart;
@@ -1859,6 +2162,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
+    hintUsed = false;
     loadProgress();
     els.puzzleSelect.value = currentPuzzle.id;
     els.reviewPuzzleSelect.value = currentPuzzle.id;
@@ -1866,6 +2170,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.message.className = "message";
     els.message.textContent = text.choosePuzzle;
     renderBoard();
+    applyLessonState();
   }
 
   async function deleteSelectedPuzzle() {
@@ -1979,8 +2284,18 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.timer.textContent = `${minutes}:${secs}`;
   }
 
-  async function loadSessions() {
+  function reviewPuzzleIds() {
     const selectedPuzzleId = els.reviewPuzzleSelect.value || els.mergePuzzleSelect.value;
+    const ids = new Set([selectedPuzzleId]);
+    puzzles.forEach((puzzle) => {
+      if (puzzle.parentId === selectedPuzzleId) ids.add(puzzle.id);
+    });
+    return Array.from(ids).filter(Boolean);
+  }
+
+  async function loadSessions() {
+    const targetIds = reviewPuzzleIds();
+    const targetSet = new Set(targetIds);
     const sessions = [];
     const seen = new Set();
 
@@ -1989,7 +2304,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       if (!raw) return;
       try {
         const data = JSON.parse(raw);
-        if (data.puzzleId === selectedPuzzleId && Array.isArray(data.state)) {
+        if (targetSet.has(data.puzzleId) && Array.isArray(data.state)) {
           const id = `local:${key}`;
           sessions.push({ id, source: "local", ...data });
           seen.add(id);
@@ -2001,10 +2316,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
     if (sharedStoreReady()) {
       try {
-        const remoteSessions = await loadRemoteSessionsForPuzzle(selectedPuzzleId);
-        remoteSessions.forEach((session) => {
-          if (!seen.has(session.id) && Array.isArray(session.state)) sessions.push(session);
-        });
+        for (const puzzleId of targetIds) {
+          const remoteSessions = await loadRemoteSessionsForPuzzle(puzzleId);
+          remoteSessions.forEach((session) => {
+            if (!seen.has(session.id) && Array.isArray(session.state)) {
+              sessions.push(session);
+              seen.add(session.id);
+            }
+          });
+        }
       } catch (error) {
         console.warn(error);
       }
@@ -2013,6 +2333,48 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     loadedSessions = sessions.sort(sortSessions);
     renderSessions();
     return loadedSessions;
+  }
+
+  function mergeLocalAndRemoteSessions(remoteSessions) {
+    const targetSet = new Set(reviewPuzzleIds());
+    const sessions = [];
+    const byDocId = new Set();
+
+    (remoteSessions || []).forEach((session) => {
+      if (Array.isArray(session.state)) {
+        sessions.push(session);
+        byDocId.add(String(session.id || "").replace(/^firebase:/, ""));
+      }
+    });
+
+    localSessionIndex().forEach((key) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        if (targetSet.has(data.puzzleId) && Array.isArray(data.state) && !byDocId.has(key.replace(/^nonogram:/, ""))) {
+          sessions.push({ id: `local:${key}`, source: "local", ...data });
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+    });
+
+    loadedSessions = sessions.sort(sortSessions);
+    renderSessions();
+  }
+
+  function startSessionLiveSync() {
+    if (unsubscribeSessions) {
+      unsubscribeSessions();
+      unsubscribeSessions = null;
+    }
+    const targetIds = reviewPuzzleIds();
+    if (!sharedStoreReady() || !targetIds.length) return;
+    unsubscribeSessions = subscribeRemoteSessionsForPuzzleGroup(targetIds, (sessions) => {
+      mergeLocalAndRemoteSessions(sessions);
+      if (activeTabName() === "merge") mergeSessions();
+    }, (error) => console.warn(error));
   }
 
   function sortSessions(a, b) {
@@ -2082,12 +2444,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         textContent: text.noSessions
       }));
       els.sessionPreview.innerHTML = "";
+      els.progressTable.innerHTML = "";
       return;
     }
 
     const submittedCount = loadedSessions.filter((session) => session.submitted).length;
     const solvedCount = loadedSessions.filter((session) => session.solved).length;
     els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c / \uc815\ub2f5 ${solvedCount}\uac1c`;
+    renderProgressTable();
     const fragment = document.createDocumentFragment();
     loadedSessions.forEach((session, index) => {
       const stats = sessionStats(session);
@@ -2100,6 +2464,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       meta.className = "session-meta";
       appendBadge(meta, session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911", session.submitted ? "good" : "");
       appendBadge(meta, session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc", session.solved ? "good" : "warn");
+      if (session.piece) appendBadge(meta, `${session.piece.row}-${session.piece.col}`);
+      if (session.hintUsed) appendBadge(meta, "\ud78c\ud2b8 \uc0ac\uc6a9", "warn");
       appendBadge(meta, `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`);
       appendBadge(meta, `\uce60\ud55c \uce78 ${stats.filled}\uac1c`);
       appendBadge(meta, formatDuration(session.seconds));
@@ -2112,6 +2478,36 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       if (index === 0) renderSessionPreview(session);
     });
     els.sessionList.replaceChildren(fragment);
+  }
+
+  function renderProgressTable() {
+    const fragment = document.createDocumentFragment();
+    const header = document.createElement("div");
+    header.className = "progress-row header";
+    ["\uc774\ub984", "\uc0c1\ud0dc", "\uc9c4\ud589\ub960", "\uc2dc\uac04"].forEach((label) => {
+      const cell = document.createElement("span");
+      cell.textContent = label;
+      header.appendChild(cell);
+    });
+    fragment.appendChild(header);
+
+    loadedSessions.forEach((session) => {
+      const stats = sessionStats(session);
+      const row = document.createElement("div");
+      row.className = "progress-row";
+      const name = document.createElement("strong");
+      name.textContent = session.studentName || "guest";
+      const status = document.createElement("span");
+      status.textContent = session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589";
+      const progress = document.createElement("span");
+      progress.textContent = `${stats.fillRate}%`;
+      const time = document.createElement("span");
+      time.textContent = formatDuration(session.seconds);
+      [name, status, progress, time].forEach((cell) => row.appendChild(cell));
+      fragment.appendChild(row);
+    });
+
+    els.progressTable.replaceChildren(fragment);
   }
 
   function renderSessionPreview(session) {
@@ -2615,12 +3011,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.markTool.addEventListener("click", () => setTool("mark"));
     els.shareQrBtn.addEventListener("click", openQrDialog);
     els.teacherModeBtn.addEventListener("click", toggleTeacherMode);
+    els.startLessonBtn.addEventListener("click", startLesson);
+    els.closeLessonBtn.addEventListener("click", closeLesson);
     els.closeQrBtn.addEventListener("click", closeQrDialog);
     els.copyQrUrlBtn.addEventListener("click", copyQrUrl);
     els.qrDialog.addEventListener("click", (event) => {
       if (event.target === els.qrDialog) closeQrDialog();
     });
     els.submitBtn.addEventListener("click", submitAnswer);
+    els.hintBtn.addEventListener("click", useHint);
     els.checkBtn.addEventListener("click", checkAnswer);
     els.resetBtn.addEventListener("click", resetPuzzle);
     els.deletePuzzleBtn.addEventListener("click", deleteSelectedPuzzle);
@@ -2628,9 +3027,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.puzzleSelect.addEventListener("change", (event) => changePuzzle(event.target.value));
     els.reviewPuzzleSelect.addEventListener("change", () => {
       els.mergePuzzleSelect.value = els.reviewPuzzleSelect.value;
+      loadSessions();
+      startSessionLiveSync();
     });
     els.mergePuzzleSelect.addEventListener("change", () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
+      loadSessions();
+      startSessionLiveSync();
     });
     els.splitPuzzleSelect.addEventListener("change", () => {
       splitPieces = [];
@@ -2645,8 +3048,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       seconds = 0;
       startedAt = Date.now();
       timerStopped = false;
+      hintUsed = false;
       loadProgress();
       renderBoard();
+      applyLessonState();
+    });
+    els.studentName.addEventListener("input", () => {
+      window.clearTimeout(nameAssignTimer);
+      nameAssignTimer = window.setTimeout(applyLessonState, 350);
     });
     els.loadSessionsBtn.addEventListener("click", loadSessions);
     els.mergeBtn.addEventListener("click", async () => {
@@ -2693,6 +3102,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     applyMode();
     renderBoard();
     startPuzzleLiveSync();
+    startLessonLiveSync();
+    startSessionLiveSync();
     window.setInterval(tick, 1000);
     tick();
   }
