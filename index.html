@@ -463,9 +463,13 @@ code {
   display: grid;
   gap: 10px;
   min-height: 64px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
   text-align: left;
   align-content: start;
   justify-items: start;
+  cursor: pointer;
 }
 
 .session-row strong {
@@ -806,7 +810,10 @@ code {
             <span>&#54140;&#51600; &#54596;&#53552;</span>
             <select id="reviewPuzzleSelect"></select>
           </label>
-          <button id="loadSessionsBtn" type="button">&#44208;&#44284; &#48520;&#47084;&#50724;&#44592;</button>
+          <div class="actions">
+            <button id="loadSessionsBtn" type="button">&#44208;&#44284; &#48520;&#47084;&#50724;&#44592;</button>
+            <button id="deleteVisibleSessionsBtn" class="danger" type="button">&#54788;&#51116; &#44208;&#44284; &#49325;&#51228;</button>
+          </div>
           <div class="summary" id="reviewSummary">&#51200;&#51109;&#46108; &#44208;&#44284;&#47484; &#48520;&#47084;&#50724;&#49464;&#50836;.</div>
           <div id="progressTable" class="progress-table"></div>
         </aside>
@@ -1126,6 +1133,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     deletePuzzleBtn: document.getElementById("deletePuzzleBtn"),
     deleteAllGeneratedBtn: document.getElementById("deleteAllGeneratedBtn"),
     loadSessionsBtn: document.getElementById("loadSessionsBtn"),
+    deleteVisibleSessionsBtn: document.getElementById("deleteVisibleSessionsBtn"),
     reviewSummary: document.getElementById("reviewSummary"),
     progressTable: document.getElementById("progressTable"),
     sessionList: document.getElementById("sessionList"),
@@ -1149,7 +1157,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-12-class-tools-1";
+  const APP_VERSION = "2026-07-12-delete-results-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1344,6 +1352,16 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
     if (db) {
       await db.collection("nonogramSessions").doc(id).set(payload, { merge: true });
+    }
+  }
+
+  async function deleteRemoteSession(id) {
+    if (rtdb) {
+      await rtdb.ref(`nonogramSessions/${id}`).remove();
+      return;
+    }
+    if (db) {
+      await db.collection("nonogramSessions").doc(id).delete();
     }
   }
 
@@ -2054,6 +2072,84 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     localStorage.setItem("nonogramSessionIndex", JSON.stringify(nextIndex));
   }
 
+  function removeLocalSessionKey(key) {
+    localStorage.removeItem(key);
+    localStorage.setItem("nonogramSessionIndex", JSON.stringify(localSessionIndex().filter((item) => item !== key)));
+  }
+
+  function removeMatchingLocalSession(session) {
+    const nextIndex = [];
+    localSessionIndex().forEach((key) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        const sameStudent = (data.studentName || "guest") === (session.studentName || "guest");
+        const samePuzzle = data.puzzleId === session.puzzleId;
+        if (sameStudent && samePuzzle) {
+          localStorage.removeItem(key);
+        } else {
+          nextIndex.push(key);
+        }
+      } catch (error) {
+        console.warn(error);
+        nextIndex.push(key);
+      }
+    });
+    localStorage.setItem("nonogramSessionIndex", JSON.stringify(nextIndex));
+  }
+
+  async function deleteSessionRecord(session) {
+    if (!session) return;
+    if (String(session.id || "").startsWith("local:")) {
+      removeLocalSessionKey(session.id.replace(/^local:/, ""));
+    } else {
+      removeMatchingLocalSession(session);
+    }
+
+    if (String(session.id || "").startsWith("firebase:") && sharedStoreReady()) {
+      await deleteRemoteSession(session.id.replace(/^firebase:/, ""));
+    }
+  }
+
+  async function deleteVisibleSessions() {
+    if (!loadedSessions.length) {
+      els.reviewSummary.textContent = text.noSessions;
+      return;
+    }
+    const ok = !window.confirm || window.confirm(`\ud604\uc7ac \ubcf4\uc774\ub294 \ud559\uc0dd \uacb0\uacfc ${loadedSessions.length}\uac1c\ub97c \uc0ad\uc81c\ud560\uae4c\uc694?`);
+    if (!ok) return;
+
+    const sessions = loadedSessions.slice();
+    for (const session of sessions) {
+      try {
+        await deleteSessionRecord(session);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+    loadedSessions = [];
+    renderSessions();
+    els.reviewSummary.textContent = `${sessions.length}\uac1c \uacb0\uacfc\ub97c \uc0ad\uc81c\ud588\uc2b5\ub2c8\ub2e4.`;
+    setSaveStatus("\uacb0\uacfc \uc0ad\uc81c\ub428", "online");
+  }
+
+  async function deleteOneSession(session) {
+    const ok = !window.confirm || window.confirm(`${session.studentName || "guest"} \uacb0\uacfc\ub97c \uc0ad\uc81c\ud560\uae4c\uc694?`);
+    if (!ok) return;
+    try {
+      await deleteSessionRecord(session);
+      loadedSessions = loadedSessions.filter((item) => item.id !== session.id);
+      renderSessions();
+      els.reviewSummary.textContent = "\ud559\uc0dd \uacb0\uacfc\ub97c \uc0ad\uc81c\ud588\uc2b5\ub2c8\ub2e4.";
+      setSaveStatus("\uacb0\uacfc \uc0ad\uc81c\ub428", "online");
+    } catch (error) {
+      console.warn(error);
+      els.reviewSummary.textContent = "\uc0ad\uc81c \uc911 \uc624\ub958\uac00 \ub0ac\uc2b5\ub2c8\ub2e4.";
+      setSaveStatus("\uc0ad\uc81c \uc2e4\ud328", "error");
+    }
+  }
+
   async function deleteFirebasePuzzleData(ids) {
     if (!sharedStoreReady()) return;
     for (const id of ids) {
@@ -2455,9 +2551,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const fragment = document.createDocumentFragment();
     loadedSessions.forEach((session, index) => {
       const stats = sessionStats(session);
-      const button = document.createElement("button");
-      button.type = "button";
+      const button = document.createElement("div");
       button.className = "session-row";
+      button.tabIndex = 0;
+      button.setAttribute("role", "button");
       const name = document.createElement("strong");
       name.textContent = session.studentName || "guest";
       const meta = document.createElement("div");
@@ -2474,6 +2571,21 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       button.appendChild(meta);
       button.appendChild(renderMiniGrid(session.state, { className: "session-thumb", minCell: 2, maxCell: 7 }));
       button.addEventListener("click", () => renderSessionPreview(session));
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          renderSessionPreview(session);
+        }
+      });
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "danger";
+      deleteBtn.textContent = "\uc774 \uacb0\uacfc \uc0ad\uc81c";
+      deleteBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteOneSession(session);
+      });
+      button.appendChild(deleteBtn);
       fragment.appendChild(button);
       if (index === 0) renderSessionPreview(session);
     });
@@ -3058,6 +3170,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       nameAssignTimer = window.setTimeout(applyLessonState, 350);
     });
     els.loadSessionsBtn.addEventListener("click", loadSessions);
+    els.deleteVisibleSessionsBtn.addEventListener("click", deleteVisibleSessions);
     els.mergeBtn.addEventListener("click", async () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
       await loadSessions();
