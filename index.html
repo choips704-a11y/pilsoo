@@ -37,7 +37,7 @@ textarea {
 }
 
 .shell {
-  width: min(1220px, calc(100vw - 32px));
+  width: min(1520px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 24px 0;
 }
@@ -84,16 +84,6 @@ h3 {
 .status-strip {
   justify-content: end;
   align-items: center;
-}
-
-.lesson-controls {
-  display: none;
-}
-
-body.teacher-mode .lesson-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .pill {
@@ -172,6 +162,23 @@ body.student-mode .shell {
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.review-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.review-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(260px, 2fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.review-toolbar .field,
+.review-toolbar .summary {
+  margin: 0;
 }
 
 .panel {
@@ -466,7 +473,7 @@ code {
 
 .session-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
   align-items: start;
@@ -474,15 +481,27 @@ code {
 
 .session-row {
   display: grid;
-  gap: 10px;
-  min-height: 64px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  min-height: 76px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 10px;
+  padding: 9px;
   text-align: left;
   align-content: start;
   justify-items: start;
   cursor: pointer;
+}
+
+.session-row > strong,
+.session-row > .session-meta {
+  grid-column: 1 / -1;
+}
+
+.session-row > button {
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 11px;
 }
 
 .session-row strong {
@@ -508,16 +527,17 @@ code {
 
 .progress-table {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 8px;
   margin-top: 12px;
 }
 
 .progress-row {
   display: grid;
-  grid-template-columns: minmax(70px, 1fr) 76px 76px 76px;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
   align-items: center;
-  min-height: 34px;
+  min-height: 58px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 8px;
@@ -527,14 +547,18 @@ code {
   font-weight: 700;
 }
 
+.progress-row span:nth-child(3),
+.progress-row span:nth-child(4) {
+  font-size: 11px;
+}
+
 .progress-row strong {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
 
 .progress-row.header {
-  background: var(--soft);
-  color: var(--ink);
+  display: none;
 }
 
 .session-badge {
@@ -562,49 +586,6 @@ code {
   color: var(--warn);
 }
 
-.group-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.group-card {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
-  background: white;
-}
-
-.group-card .summary {
-  margin-top: 0;
-}
-
-.roster-preview {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.roster-group {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px;
-  background: white;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.roster-group strong {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--ink);
-}
-
 .session-detail {
   display: grid;
   gap: 10px;
@@ -619,31 +600,6 @@ code {
 
 .preview-box {
   overflow: auto;
-}
-
-.piece-grid {
-  min-width: 0;
-  overflow: auto;
-}
-
-.piece-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.piece-card {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
-  background: white;
-}
-
-.piece-card strong {
-  font-size: 13px;
 }
 
 .mini-grid {
@@ -758,13 +714,15 @@ code {
     flex-direction: column;
   }
 
+  .review-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .status-strip {
     justify-content: start;
   }
 
-  .group-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 </style>
@@ -777,14 +735,8 @@ code {
         <h1>&#45432;&#45432;&#44536;&#47016; &#54876;&#46041;</h1>
       </div>
       <div class="status-strip">
-        <div class="lesson-controls">
-          <button id="startIndividualLessonBtn" type="button">&#44060;&#48324; &#49688;&#50629; &#49884;&#51089;</button>
-          <button id="startGroupLessonBtn" type="button">&#51312;&#48324; &#49688;&#50629; &#49884;&#51089;</button>
-          <button id="closeLessonBtn" class="danger" type="button">&#49688;&#50629; &#47560;&#44048;</button>
-        </div>
         <button id="shareQrBtn" class="secondary" type="button">QR &#51077;&#51109;</button>
         <button id="teacherModeBtn" class="secondary" type="button">&#44368;&#49324; &#47784;&#46300;</button>
-        <span id="lessonStatus" class="pill neutral">&#49688;&#50629; &#45824;&#44592;</span>
         <span id="connectionStatus" class="pill neutral">&#47196;&#52972; &#47784;&#46300;</span>
         <span id="saveStatus" class="pill">&#51200;&#51109; &#45824;&#44592;</span>
       </div>
@@ -793,9 +745,7 @@ code {
     <nav class="tabs" aria-label="main tabs">
       <button class="tab active" data-tab="play" type="button">&#54400;&#44592;</button>
       <button class="tab teacher-only" data-tab="review" type="button">&#54869;&#51064;</button>
-      <button class="tab teacher-only" data-tab="groups" type="button">&#51312;&#48324;</button>
       <button class="tab teacher-only" data-tab="merge" type="button">&#54633;&#52824;&#44592;</button>
-      <button class="tab teacher-only" data-tab="pieces" type="button">&#51312;&#44033;</button>
       <button class="tab teacher-only" data-tab="convert" type="button">&#51060;&#48120;&#51648; &#48320;&#54872;</button>
     </nav>
 
@@ -805,18 +755,6 @@ code {
           <label class="field">
             <span>&#54617;&#49373; &#51060;&#47492;</span>
             <input id="studentName" type="text" autocomplete="name" placeholder="&#51060;&#47492; &#51077;&#47141;">
-          </label>
-
-          <label class="field">
-            <span>&#51312;</span>
-            <select id="groupSelect">
-              <option value="1">1&#51312;</option>
-              <option value="2">2&#51312;</option>
-              <option value="3">3&#51312;</option>
-              <option value="4">4&#51312;</option>
-              <option value="5">5&#51312;</option>
-              <option value="6">6&#51312;</option>
-            </select>
           </label>
 
           <label class="field">
@@ -857,7 +795,6 @@ code {
         <section class="board-wrap" aria-label="nonogram board">
           <div id="message" class="message">&#54140;&#51600;&#51012; &#49440;&#53469;&#54616;&#44256; &#52856;&#51012; &#52292;&#50892;&#48372;&#49464;&#50836;.</div>
           <div id="board" class="board"></div>
-          <div id="myGroupPreview" class="preview-box"></div>
         </section>
 
         <aside class="panel teacher teacher-only" aria-label="firebase setup">
@@ -878,9 +815,8 @@ code {
     </section>
 
     <section id="reviewTab" class="tab-panel">
-      <section class="workspace-grid">
-        <aside class="panel">
-          <h2>&#54617;&#49373; &#44208;&#44284; &#54869;&#51064;</h2>
+      <section class="review-layout">
+        <div class="panel review-toolbar">
           <label class="field">
             <span>&#54140;&#51600; &#54596;&#53552;</span>
             <select id="reviewPuzzleSelect"></select>
@@ -890,36 +826,15 @@ code {
             <button id="deleteVisibleSessionsBtn" class="danger" type="button">&#54788;&#51116; &#44208;&#44284; &#49325;&#51228;</button>
           </div>
           <div class="summary" id="reviewSummary">&#51200;&#51109;&#46108; &#44208;&#44284;&#47484; &#48520;&#47084;&#50724;&#49464;&#50836;.</div>
-          <div id="progressTable" class="progress-table"></div>
-        </aside>
+        </div>
         <section class="panel wide">
+          <h2>&#54617;&#49373; &#51652;&#54665; &#54620;&#45576;&#50640; &#48372;&#44592;</h2>
+          <div id="progressTable" class="progress-table"></div>
+        </section>
+        <section class="panel wide">
+          <h2>&#54617;&#49373; &#44208;&#44284; &#49345;&#49464;</h2>
           <div id="sessionList" class="session-list"></div>
           <div id="sessionPreview" class="preview-box"></div>
-        </section>
-      </section>
-    </section>
-
-    <section id="groupsTab" class="tab-panel">
-      <section class="workspace-grid">
-        <aside class="panel">
-          <h2>&#51312;&#48324; &#49892;&#49884;&#44036; &#54869;&#51064;</h2>
-          <label class="field">
-            <span>&#50896;&#48376; &#54140;&#51600;</span>
-            <select id="groupPuzzleSelect"></select>
-          </label>
-          <label class="field">
-            <span>&#54617;&#49373; &#47749;&#45800;</span>
-            <textarea id="studentRosterInput" placeholder="&#54620; &#51460;&#50640; &#54620; &#47749;&#50473; &#51077;&#47141;&#54616;&#44144;&#45208;, &#50641;&#49472;&#50640;&#49436; &#51060;&#47492;&#51012; &#48393;&#50668;&#45347;&#51004;&#49464;&#50836;."></textarea>
-          </label>
-          <div class="actions">
-            <button id="autoGroupBtn" type="button">&#47749;&#45800; 6&#51312; &#51088;&#46041; &#45208;&#45572;&#44592;</button>
-            <button id="loadGroupsBtn" type="button">&#51312;&#48324; &#49352;&#47196;&#44256;&#52840;</button>
-          </div>
-          <div id="rosterSummary" class="roster-preview"></div>
-          <div id="groupSummary" class="summary">1&#51312;&#48512;&#53552; 6&#51312;&#44620;&#51648; &#54620; &#54868;&#47732;&#50640; &#48372;&#50668;&#51469;&#45768;&#45796;.</div>
-        </aside>
-        <section class="panel wide">
-          <div id="groupBoards" class="group-grid"></div>
         </section>
       </section>
     </section>
@@ -956,48 +871,6 @@ code {
       </section>
     </section>
 
-    <section id="piecesTab" class="tab-panel">
-      <section class="workspace-grid">
-        <aside class="panel">
-          <h2>&#53360; &#47196;&#51649; &#51312;&#44033;&#45236;&#44592;</h2>
-          <label class="field">
-            <span>&#45208;&#45580; &#50896;&#48376; &#54140;&#51600;</span>
-            <select id="splitPuzzleSelect"></select>
-          </label>
-          <label class="field">
-            <span>&#51312;&#44033; &#53356;&#44592;</span>
-            <select id="pieceSize">
-              <option value="5">5x5</option>
-              <option value="8">8x8</option>
-              <option value="10" selected>10x10</option>
-              <option value="20">20x20</option>
-            </select>
-          </label>
-          <div class="actions">
-            <button id="splitPuzzleBtn" type="button">&#51312;&#44033; &#48120;&#47532;&#48372;&#44592;</button>
-            <button id="savePiecesBtn" class="secondary" type="button">&#51312;&#44033; &#54140;&#51600; &#52628;&#44032;</button>
-            <button id="deletePiecesBtn" class="danger" type="button">&#51060; &#50896;&#48376;&#51032; &#51312;&#44033; &#49325;&#51228;</button>
-            <button id="deleteAllPiecesBtn" class="danger" type="button">&#47784;&#46304; &#51312;&#44033; &#49325;&#51228;</button>
-          </div>
-          <div id="pieceSummary" class="summary">100x100&#51012; 10x10&#51004;&#47196; &#45208;&#45572;&#47732; 100&#44060; &#51312;&#44033;&#51060; &#49373;&#49457;&#46121;&#45768;&#45796;.</div>
-
-          <h2 class="section-title">&#51312;&#44033; &#44208;&#44284; &#48537;&#51060;&#44592;</h2>
-          <label class="field">
-            <span>&#48537;&#51060;&#44592; &#50896;&#48376;</span>
-            <select id="combineParentSelect"></select>
-          </label>
-          <div class="actions">
-            <button id="combinePiecesBtn" type="button">&#54617;&#49373; &#51312;&#44033; &#48537;&#51060;&#44592;</button>
-            <button id="saveCombinedBtn" class="secondary" type="button">&#54633;&#52432;&#51652; &#54140;&#51600; &#52628;&#44032;</button>
-          </div>
-          <div id="combinePieceSummary" class="summary">&#51312;&#44033; &#54140;&#51600;&#51012; &#54617;&#49373;&#46308;&#51060; &#54400;&#47732; &#50896;&#47000; &#50948;&#52824;&#50640; &#48537;&#51068; &#49688; &#51080;&#49845;&#45768;&#45796;.</div>
-        </aside>
-        <section class="panel wide">
-          <div id="piecePreview" class="piece-grid"></div>
-          <div id="combinedPiecePreview" class="preview-box"></div>
-        </section>
-      </section>
-    </section>
 
     <section id="convertTab" class="tab-panel">
       <section class="workspace-grid">
@@ -1194,33 +1067,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     puzzleSelect: document.getElementById("puzzleSelect"),
     reviewPuzzleSelect: document.getElementById("reviewPuzzleSelect"),
     mergePuzzleSelect: document.getElementById("mergePuzzleSelect"),
-    splitPuzzleSelect: document.getElementById("splitPuzzleSelect"),
-    pieceSize: document.getElementById("pieceSize"),
-    splitPuzzleBtn: document.getElementById("splitPuzzleBtn"),
-    savePiecesBtn: document.getElementById("savePiecesBtn"),
-    deletePiecesBtn: document.getElementById("deletePiecesBtn"),
-    deleteAllPiecesBtn: document.getElementById("deleteAllPiecesBtn"),
-    pieceSummary: document.getElementById("pieceSummary"),
-    piecePreview: document.getElementById("piecePreview"),
-    combineParentSelect: document.getElementById("combineParentSelect"),
-    combinePiecesBtn: document.getElementById("combinePiecesBtn"),
-    saveCombinedBtn: document.getElementById("saveCombinedBtn"),
-    combinePieceSummary: document.getElementById("combinePieceSummary"),
-    combinedPiecePreview: document.getElementById("combinedPiecePreview"),
     studentName: document.getElementById("studentName"),
-    groupSelect: document.getElementById("groupSelect"),
-    myGroupPreview: document.getElementById("myGroupPreview"),
-    groupPuzzleSelect: document.getElementById("groupPuzzleSelect"),
-    studentRosterInput: document.getElementById("studentRosterInput"),
-    autoGroupBtn: document.getElementById("autoGroupBtn"),
-    loadGroupsBtn: document.getElementById("loadGroupsBtn"),
-    rosterSummary: document.getElementById("rosterSummary"),
-    groupSummary: document.getElementById("groupSummary"),
-    groupBoards: document.getElementById("groupBoards"),
-    startIndividualLessonBtn: document.getElementById("startIndividualLessonBtn"),
-    startGroupLessonBtn: document.getElementById("startGroupLessonBtn"),
-    closeLessonBtn: document.getElementById("closeLessonBtn"),
-    lessonStatus: document.getElementById("lessonStatus"),
     connectionStatus: document.getElementById("connectionStatus"),
     saveStatus: document.getElementById("saveStatus"),
     shareQrBtn: document.getElementById("shareQrBtn"),
@@ -1267,7 +1114,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-13-roster-auto-1";
+  const APP_VERSION = "2026-07-13-simple-class-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1282,17 +1129,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let loadedSessions = [];
   let mergedGrid = null;
   let convertedGrid = null;
-  let splitPieces = [];
-  let combinedPieceGrid = null;
   let uploadedImage = null;
   let liveRefreshBusy = false;
   let unsubscribePuzzles = null;
   let unsubscribeSessions = null;
-  let unsubscribeGroupPreview = null;
-  let unsubscribeLesson = null;
-  let lessonState = { open: true, puzzleId: "", title: "", runId: "", mode: "free" };
-  let assignedByLesson = false;
-  let nameAssignTimer = null;
   let dragPaint = null;
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
@@ -1510,72 +1350,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
   }
 
-  async function saveLessonState(payload) {
-    if (rtdb) {
-      await rtdb.ref("nonogramClass/current").update(payload);
-      return;
-    }
-    if (db) {
-      await db.collection("nonogramClass").doc("current").set(payload, { merge: true });
-    }
-  }
-
-  function assignmentId(lessonRunId, groupName, studentName) {
-    return `${lessonRunId || "lesson"}_${groupName || "1"}_${studentName || "guest"}`.replace(/[^\w-]+/g, "_");
-  }
-
-  async function loadRemoteAssignments(lessonRunId, groupName) {
-    if (rtdb) {
-      const snapshot = await rtdb.ref("nonogramAssignments").orderByChild("lessonGroup").equalTo(`${lessonRunId}:${groupName}`).once("value");
-      return snapshotToList(snapshot).map((item) => ({ id: item.id, ...item.data }));
-    }
-    if (db) {
-      const snapshot = await db.collection("nonogramAssignments").where("lessonGroup", "==", `${lessonRunId}:${groupName}`).get();
-      const assignments = [];
-      snapshot.forEach((doc) => assignments.push({ id: doc.id, ...doc.data() }));
-      return assignments;
-    }
-    return [];
-  }
-
-  async function loadRemoteAssignmentsForLesson(lessonRunId) {
-    if (!lessonRunId) return [];
-    if (rtdb) {
-      const snapshot = await rtdb.ref("nonogramAssignments").orderByChild("lessonRunId").equalTo(lessonRunId).once("value");
-      return snapshotToList(snapshot).map((item) => ({ id: item.id, ...item.data }));
-    }
-    if (db) {
-      const snapshot = await db.collection("nonogramAssignments").where("lessonRunId", "==", lessonRunId).get();
-      const assignments = [];
-      snapshot.forEach((doc) => assignments.push({ id: doc.id, ...doc.data() }));
-      return assignments;
-    }
-    return [];
-  }
-
-  async function saveRemoteAssignment(id, payload) {
-    if (rtdb) {
-      await rtdb.ref(`nonogramAssignments/${id}`).update(payload);
-      return;
-    }
-    if (db) {
-      await db.collection("nonogramAssignments").doc(id).set(payload, { merge: true });
-    }
-  }
-
-  function subscribeLessonState(onLesson, onError) {
-    if (rtdb) {
-      const ref = rtdb.ref("nonogramClass/current");
-      const handler = (snapshot) => onLesson(snapshot.val() || {});
-      ref.on("value", handler, onError);
-      return () => ref.off("value", handler);
-    }
-    if (db) {
-      return db.collection("nonogramClass").doc("current").onSnapshot((doc) => onLesson(doc.exists ? doc.data() : {}), onError);
-    }
-    return null;
-  }
-
   function setConnection(label, type) {
     els.connectionStatus.textContent = label;
     els.connectionStatus.className = "pill " + type;
@@ -1590,295 +1364,19 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const url = new URL(window.location.href.split("#")[0]);
     url.searchParams.delete("teacher");
     url.searchParams.set("v", APP_VERSION);
-    const sharePuzzleId = lessonState.open !== false && lessonState.mode === "group" && lessonState.puzzleId ? lessonState.puzzleId : currentPuzzle.id;
-    if (teacherMode && sharePuzzleId) {
-      url.searchParams.set("puzzle", sharePuzzleId);
+    if (teacherMode && currentPuzzle.id) {
+      url.searchParams.set("puzzle", currentPuzzle.id);
     }
     return url.toString();
   }
 
-  function setLessonStatus(label, type) {
-    els.lessonStatus.textContent = label;
-    els.lessonStatus.className = "pill " + (type || "neutral");
-  }
-
   function lessonOpen() {
-    return teacherMode || lessonState.open !== false;
-  }
-
-  function studentKey() {
-    let key = localStorage.getItem("nonogramStudentKey");
-    if (!key) {
-      key = `student-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      localStorage.setItem("nonogramStudentKey", key);
-    }
-    return key;
-  }
-
-  function hashText(value) {
-    let hash = 0;
-    for (let index = 0; index < value.length; index += 1) {
-      hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-    }
-    return Math.abs(hash);
-  }
-
-  function piecesForParent(parentId) {
-    return puzzles
-      .filter((puzzle) => puzzle.parentId === parentId && puzzle.piece)
-      .sort((a, b) => {
-        const ap = a.piece || {};
-        const bp = b.piece || {};
-        return (ap.row - bp.row) || (ap.col - bp.col) || a.title.localeCompare(b.title);
-      });
-  }
-
-  function normalizeRosterName(name) {
-    return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
-  }
-
-  function parseRosterNames(value) {
-    const seen = new Set();
-    return String(value || "")
-      .split(/[\n,;\t|]+/)
-      .map((name) => name.trim())
-      .filter(Boolean)
-      .filter((name) => {
-        const key = normalizeRosterName(name);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }
-
-  function buildRosterGroups(names) {
-    const groups = Array.from({ length: 6 }, () => []);
-    names.forEach((name, index) => {
-      groups[index % groups.length].push(name);
-    });
-    return groups;
-  }
-
-  function renderRosterSummary(groups, message) {
-    const fragment = document.createDocumentFragment();
-    if (message) {
-      const summary = document.createElement("div");
-      summary.className = "summary";
-      summary.textContent = message;
-      fragment.appendChild(summary);
-    }
-    groups.forEach((names, index) => {
-      const group = document.createElement("div");
-      group.className = "roster-group";
-      const title = document.createElement("strong");
-      title.textContent = `${index + 1}\uc870 ${names.length}\uba85`;
-      const body = document.createElement("span");
-      body.textContent = names.length ? names.join(", ") : "\ubc30\uc815\ub41c \ud559\uc0dd \uc5c6\uc74c";
-      group.appendChild(title);
-      group.appendChild(body);
-      fragment.appendChild(group);
-    });
-    els.rosterSummary.replaceChildren(fragment);
-  }
-
-  function assignedLessonPuzzle() {
-    if (!lessonState.puzzleId) return null;
-    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
-    const pieces = piecesForParent(lessonState.puzzleId);
-    if (!pieces.length) return parent || null;
-    const name = els.studentName.value.trim();
-    const group = els.groupSelect.value || "1";
-    if (!name) return parent || pieces[0];
-    return pieces[hashText(`${group}:${name}:${studentKey()}`) % pieces.length];
-  }
-
-  async function assignedLessonPuzzleAsync() {
-    if (!lessonState.puzzleId) return null;
-    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
-    const pieces = piecesForParent(lessonState.puzzleId);
-    if (!pieces.length) return parent || null;
-
-    const studentName = els.studentName.value.trim();
-    const lessonRunId = lessonState.runId || lessonState.puzzleId;
-    if (!studentName) return parent || pieces[0];
-    if (!sharedStoreReady()) return assignedLessonPuzzle();
-
-    try {
-      const lessonAssignments = await loadRemoteAssignmentsForLesson(lessonRunId);
-      const rosterMatch = lessonAssignments.find((item) => normalizeRosterName(item.studentName) === normalizeRosterName(studentName));
-      if (rosterMatch && pieces.some((piece) => piece.id === rosterMatch.puzzleId)) {
-        if (rosterMatch.groupName) els.groupSelect.value = String(rosterMatch.groupName);
-        return puzzles.find((puzzle) => puzzle.id === rosterMatch.puzzleId) || assignedLessonPuzzle();
-      }
-
-      const groupName = els.groupSelect.value || "1";
-      const id = assignmentId(lessonRunId, groupName, studentName);
-      const assignments = await loadRemoteAssignments(lessonRunId, groupName);
-      const existing = assignments.find((item) => item.id === id || item.studentName === studentName);
-      if (existing && pieces.some((piece) => piece.id === existing.puzzleId)) {
-        return puzzles.find((puzzle) => puzzle.id === existing.puzzleId) || assignedLessonPuzzle();
-      }
-
-      const used = new Set(assignments.map((item) => item.puzzleId));
-      const nextPiece = pieces.find((piece) => !used.has(piece.id)) || pieces[assignments.length % pieces.length];
-      await saveRemoteAssignment(id, {
-        lessonId: lessonState.puzzleId,
-        lessonRunId,
-        lessonGroup: `${lessonRunId}:${groupName}`,
-        groupName,
-        studentName,
-        puzzleId: nextPiece.id,
-        puzzleTitle: nextPiece.title,
-        createdAt: serverTimestamp()
-      });
-      return nextPiece;
-    } catch (error) {
-      console.warn(error);
-      return assignedLessonPuzzle();
-    }
-  }
-
-  async function applyLessonAssignment() {
-    if (teacherMode || lessonState.open === false || !lessonState.puzzleId) return;
-    if (!els.studentName.value.trim()) return;
-    const assigned = await assignedLessonPuzzleAsync();
-    if (assigned && assigned.id !== currentPuzzle.id) {
-      assignedByLesson = true;
-      changePuzzle(assigned.id);
-      els.message.className = "message";
-      els.message.textContent = assigned.piece ? `${assigned.title}\uc774 \ubc30\uc815\ub418\uc5c8\uc2b5\ub2c8\ub2e4.` : text.choosePuzzle;
-      assignedByLesson = false;
-    }
-    if (assigned) {
-      await saveProgress(false, { submitted: false });
-    }
+    return true;
   }
 
   function applyLessonState() {
-    const lessonPuzzle = lessonState.puzzleId ? puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId) : null;
-    if (lessonState.open === false) {
-      setLessonStatus("\uc218\uc5c5 \ub9c8\uac10", "error");
-      if (!teacherMode) {
-        els.message.className = "message error";
-        els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
-      }
-    } else if (lessonState.mode === "individual") {
-      setLessonStatus("\uac1c\ubcc4 \uc218\uc5c5 \uc911", "online");
-    } else if (lessonPuzzle) {
-      setLessonStatus(`\uc870\ubcc4 \uc218\uc5c5: ${lessonPuzzle.title}`, "online");
-    } else {
-      setLessonStatus("\uc218\uc5c5 \ub300\uae30", "neutral");
-    }
-
-    els.submitBtn.disabled = !lessonOpen();
-    els.hintBtn.disabled = hintUsed || !lessonOpen();
-
-    if (lessonState.mode === "group" && !assignedByLesson) applyLessonAssignment();
-    startMyGroupPreviewSync();
-  }
-
-  async function startIndividualLesson() {
-    lessonState = { open: true, puzzleId: "", title: "\uac1c\ubcc4 \uc218\uc5c5", runId: `individual-${Date.now()}`, mode: "individual" };
-    els.reviewPuzzleSelect.value = "__all__";
-    applyLessonState();
-    if (sharedStoreReady()) {
-      await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
-      setSaveStatus("\uac1c\ubcc4 \uc218\uc5c5 \uc2dc\uc791\ub428", "online");
-    } else {
-      setSaveStatus("\ub85c\uceec \uac1c\ubcc4 \uc218\uc5c5(\uacf5\uc720 \uc548 \ub428)", "error");
-    }
-  }
-
-  async function startGroupLesson() {
-    const parentId = currentPuzzle.parentId || currentPuzzle.id;
-    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
-    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `group-${Date.now()}`, mode: "group" };
-    els.reviewPuzzleSelect.value = parent.id;
-    els.groupPuzzleSelect.value = parent.id;
-    applyLessonState();
-    if (sharedStoreReady()) {
-      await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
-      setSaveStatus("\uc870\ubcc4 \uc218\uc5c5 \uc2dc\uc791\ub428", "online");
-    } else {
-      setSaveStatus("\ub85c\uceec \uc870\ubcc4 \uc218\uc5c5(\uacf5\uc720 \uc548 \ub428)", "error");
-    }
-  }
-
-  async function autoGroupRoster() {
-    const names = parseRosterNames(els.studentRosterInput.value);
-    const groups = buildRosterGroups(names);
-    renderRosterSummary(groups, names.length ? `${names.length}\uba85\uc744 6\uac1c \uc870\ub85c \ub098\ub220 \ubc30\uc815\ud558\ub294 \uc911\uc785\ub2c8\ub2e4.` : "\uba85\ub2e8\uc744 \uba3c\uc800 \uc785\ub825\ud558\uc138\uc694.");
-    if (!names.length) return;
-
-    const parentId = selectedGroupParentId();
-    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
-    const pieces = piecesForParent(parent.id);
-    if (!pieces.length) {
-      els.groupSummary.textContent = "\uba3c\uc800 \uc774 \uc6d0\ubcf8 \ud37c\uc990\uc744 \uc870\uac01\uc73c\ub85c \ub098\ub220 \uc800\uc7a5\ud558\uc138\uc694.";
-      return;
-    }
-    if (!sharedStoreReady()) {
-      renderRosterSummary(groups, "Firebase\uac00 \uc5f0\uacb0\ub418\uc5b4\uc57c \ud559\uc0dd \ud734\ub300\ud3f0\uc5d0 \ubc30\uc815\uc774 \ubcf4\uc785\ub2c8\ub2e4.");
-      setSaveStatus("Firebase \uc5f0\uacb0 \ud544\uc694", "error");
-      return;
-    }
-
-    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `group-${Date.now()}`, mode: "group" };
-    els.reviewPuzzleSelect.value = parent.id;
-    els.groupPuzzleSelect.value = parent.id;
-    applyLessonState();
-    await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
-
-    const saves = [];
-    groups.forEach((groupNames, groupIndex) => {
-      const groupName = String(groupIndex + 1);
-      groupNames.forEach((studentName, studentIndex) => {
-        const piece = pieces[studentIndex % pieces.length];
-        const id = assignmentId(lessonState.runId, groupName, studentName);
-        saves.push(saveRemoteAssignment(id, {
-          lessonId: parent.id,
-          lessonRunId: lessonState.runId,
-          lessonGroup: `${lessonState.runId}:${groupName}`,
-          groupName,
-          studentName,
-          puzzleId: piece.id,
-          puzzleTitle: piece.title,
-          rosterAssigned: true,
-          createdAt: serverTimestamp()
-        }));
-      });
-    });
-
-    await Promise.all(saves);
-    localStorage.setItem("nonogramStudentRoster", JSON.stringify(names));
-    renderRosterSummary(groups, `${names.length}\uba85 \ubc30\uc815 \uc644\ub8cc. \ud559\uc0dd\uc740 \uc774\ub984\ub9cc \uc785\ub825\ud558\uba74 \uc790\uae30 \uc870\uac01\uc744 \ubc1b\uc2b5\ub2c8\ub2e4.`);
-    setSaveStatus("\uba85\ub2e8 \uc790\ub3d9 \ubc30\uc815 \uc644\ub8cc", "online");
-    await loadGroupSessions();
-  }
-
-  async function closeLesson() {
-    lessonState = { ...lessonState, open: false };
-    applyLessonState();
-    if (sharedStoreReady()) {
-      await saveLessonState({ open: false, runId: lessonState.runId || "", mode: lessonState.mode || "free", updatedAt: serverTimestamp() });
-      setSaveStatus("\uc218\uc5c5 \ub9c8\uac10\ub428", "online");
-    } else {
-      setSaveStatus("\ub85c\uceec \uc218\uc5c5 \ub9c8\uac10", "error");
-    }
-  }
-
-  function startLessonLiveSync() {
-    if (!sharedStoreReady() || unsubscribeLesson) return;
-    unsubscribeLesson = subscribeLessonState((remoteLesson) => {
-      lessonState = {
-        open: remoteLesson.open !== false,
-        puzzleId: remoteLesson.puzzleId || "",
-        title: remoteLesson.title || "",
-        runId: remoteLesson.runId || "",
-        mode: remoteLesson.mode || "free"
-      };
-      applyLessonState();
-    }, (error) => console.warn(error));
+    els.submitBtn.disabled = false;
+    els.hintBtn.disabled = hintUsed;
   }
 
   function openQrDialog() {
@@ -1887,7 +1385,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.qrImage.src = "https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=12&data=" + encodeURIComponent(url);
     if (!sharedStoreReady()) {
       els.message.className = "message error";
-      els.message.textContent = "Firebase \uc124\uc815\uc774 \uc5c6\uc5b4 QR\ub85c \uc811\uc18d\ud574\ub3c4 \ub0b4 \ucef4\ud4e8\ud130\uc758 \uc870\uac01/\uc81c\ucd9c \uacb0\uacfc\uac00 \uacf5\uc720\ub418\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4.";
+      els.message.textContent = "Firebase \uc124\uc815\uc774 \uc5c6\uc5b4 QR\ub85c \uc811\uc18d\ud574\ub3c4 \uc81c\ucd9c \uacb0\uacfc\uac00 \uacf5\uc720\ub418\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4.";
     }
     if (els.qrDialog.showModal) {
       els.qrDialog.showModal();
@@ -2026,7 +1524,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     (remotePuzzles || []).forEach((puzzle) => byId.set(puzzle.id, puzzle));
 
     const previousId = currentPuzzle ? currentPuzzle.id : "";
-    puzzles = Array.from(byId.values());
+    puzzles = Array.from(byId.values()).filter((puzzle) => !puzzle.piece);
     currentPuzzle = puzzles.find((puzzle) => puzzle.id === previousId) || puzzles[0];
     hydratePuzzleSelects();
     applyLessonState();
@@ -2061,7 +1559,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function hydratePuzzleSelects() {
-    [els.puzzleSelect, els.reviewPuzzleSelect, els.groupPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
+    [els.puzzleSelect, els.reviewPuzzleSelect, els.mergePuzzleSelect].forEach((select) => {
       const selected = select.value;
       select.innerHTML = "";
       if (select === els.reviewPuzzleSelect) {
@@ -2083,29 +1581,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       }
     });
 
-    hydrateParentSelect();
     els.puzzleSelect.value = currentPuzzle.id;
     if (els.reviewPuzzleSelect.value !== "__all__") els.reviewPuzzleSelect.value = currentPuzzle.id;
-    els.groupPuzzleSelect.value = currentPuzzle.parentId || currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
-    els.splitPuzzleSelect.value = currentPuzzle.id;
-  }
-
-  function hydrateParentSelect() {
-    const selected = els.combineParentSelect.value;
-    const parents = puzzles.filter((puzzle) => !puzzle.parentId);
-    els.combineParentSelect.innerHTML = "";
-    parents.forEach((puzzle) => {
-      const option = document.createElement("option");
-      option.value = puzzle.id;
-      option.textContent = `${puzzle.title} (${puzzle.grid[0].length}x${puzzle.grid.length})`;
-      els.combineParentSelect.appendChild(option);
-    });
-    if (parents.some((puzzle) => puzzle.id === selected)) {
-      els.combineParentSelect.value = selected;
-    } else if (currentPuzzle && !currentPuzzle.parentId) {
-      els.combineParentSelect.value = currentPuzzle.id;
-    }
   }
 
   function cellSizeFor(grid) {
@@ -2386,14 +1864,18 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function storageKey() {
     const name = (els.studentName.value || "guest").trim().replace(/\s+/g, "_");
-    const group = els.groupSelect.value || "1";
-    return `nonogram:${group}:${name}:${currentPuzzle.id}`;
+    return `nonogram:${name}:${currentPuzzle.id}`;
+  }
+
+  function safeSessionIdPart(value) {
+    return encodeURIComponent(String(value || "guest").trim())
+      .replace(/[.#$\[\]\/]/g, "_")
+      .slice(0, 180) || "guest";
   }
 
   function sessionDocId() {
-    const name = (els.studentName.value || "guest").trim().replace(/[^\w-]+/g, "_");
-    const group = (els.groupSelect.value || "1").replace(/[^\w-]+/g, "_");
-    return `group${group}_${name || "guest"}_${currentPuzzle.id}`;
+    const name = safeSessionIdPart(els.studentName.value);
+    return `student_${name}_${safeSessionIdPart(currentPuzzle.id)}`;
   }
 
   function localSessionIndex() {
@@ -2446,8 +1928,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         const data = JSON.parse(raw);
         const sameStudent = (data.studentName || "guest") === (session.studentName || "guest");
         const samePuzzle = data.puzzleId === session.puzzleId;
-        const sameGroup = (data.groupName || "1") === (session.groupName || "1");
-        if (sameStudent && samePuzzle && sameGroup) {
+        if (sameStudent && samePuzzle) {
           localStorage.removeItem(key);
         } else {
           nextIndex.push(key);
@@ -2540,16 +2021,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       wasSubmitted = false;
     }
     const submitted = Object.prototype.hasOwnProperty.call(meta, "submitted") ? Boolean(meta.submitted) : wasSubmitted;
-      const payload = {
+    const payload = {
       studentName: els.studentName.value.trim() || "guest",
-      groupName: els.groupSelect.value || "1",
-      lessonRunId: lessonState.runId || "",
-      lessonMode: lessonState.mode || "free",
       puzzleId: currentPuzzle.id,
       puzzleTitle: currentPuzzle.title,
-      parentId: currentPuzzle.parentId || null,
-      parentTitle: currentPuzzle.parentTitle || "",
-      piece: currentPuzzle.piece || null,
       state: state,
       seconds: timerStopped ? seconds : seconds + Math.floor((Date.now() - startedAt) / 1000),
       hintUsed: hintUsed,
@@ -2654,48 +2129,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.message.textContent = "\uc120\ud0dd\ud55c \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.";
   }
 
-  async function deletePiecesForSelectedParent() {
-    const parentId = els.combineParentSelect.value || els.splitPuzzleSelect.value;
-    const parent = puzzles.find((puzzle) => puzzle.id === parentId);
-    const pieces = puzzles.filter((puzzle) => puzzle.parentId === parentId && !isBuiltInPuzzle(puzzle.id));
-
-    if (!parent || !pieces.length) {
-      els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
-      return;
-    }
-
-    const ok = !window.confirm || window.confirm(`"${parent.title}"\uc758 \uc870\uac01 ${pieces.length}\uac1c\ub97c \uc9c0\uc6b8\uae4c\uc694?`);
-    if (!ok) return;
-
-    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
-    splitPieces = [];
-    combinedPieceGrid = null;
-    els.piecePreview.innerHTML = "";
-    els.combinedPiecePreview.innerHTML = "";
-    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
-    els.combinePieceSummary.textContent = "\uc870\uac01 \ud37c\uc990\uc744 \ub2e4\uc2dc \ucd94\uac00\ud558\uba74 \ud559\uc0dd\uc5d0\uac8c \ubc30\uc815\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
-  }
-
-  async function deleteAllPieces() {
-    const pieces = puzzles.filter((puzzle) => puzzle.parentId && !isBuiltInPuzzle(puzzle.id));
-
-    if (!pieces.length) {
-      els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
-      return;
-    }
-
-    const ok = !window.confirm || window.confirm(`\ubaa8\ub4e0 \uc870\uac01 \ud37c\uc990 ${pieces.length}\uac1c\uc640 \uad00\ub828 \ud480\uc774 \uae30\ub85d\uc744 \uc804\ubd80 \uc9c0\uc6b8\uae4c\uc694?`);
-    if (!ok) return;
-
-    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
-    splitPieces = [];
-    combinedPieceGrid = null;
-    els.piecePreview.innerHTML = "";
-    els.combinedPiecePreview.innerHTML = "";
-    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc804\ubd80 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
-    els.combinePieceSummary.textContent = "\uc870\uac01 \ud480\uc774 \uae30\ub85d\ub3c4 \ud568\uaed8 \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.";
-  }
-
   async function deleteAllGenerated() {
     const generated = puzzles.filter((puzzle) => !isBuiltInPuzzle(puzzle.id));
 
@@ -2709,16 +2142,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (!ok) return;
 
     await deletePuzzlesByIds(generated.map((puzzle) => puzzle.id));
-    splitPieces = [];
     mergedGrid = null;
     convertedGrid = null;
-    combinedPieceGrid = null;
     loadedSessions = [];
     els.sessionList.innerHTML = "";
     els.sessionPreview.innerHTML = "";
     els.mergePreview.innerHTML = "";
-    els.piecePreview.innerHTML = "";
-    els.combinedPiecePreview.innerHTML = "";
     els.convertPreview.innerHTML = "";
     changePuzzle(builtInPuzzles[0].id);
     els.message.className = "message success";
@@ -2757,8 +2186,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function sessionInCurrentLesson(session) {
-    if (!lessonState.runId) return true;
-    return session.lessonRunId === lessonState.runId;
+    return true;
   }
 
   async function loadSessions() {
@@ -2795,7 +2223,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function sessionUniqueKey(session) {
     return [
-      session.groupName || "1",
       session.studentName || "guest",
       session.puzzleId || "",
       session.source === "firebase" ? "firebase" : "local"
@@ -2804,7 +2231,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function sessionStudentPuzzleKey(session) {
     return [
-      session.groupName || "1",
       session.studentName || "guest",
       session.puzzleId || ""
     ].join("|");
@@ -2833,7 +2259,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function mergeLocalAndRemoteSessions(remoteSessions) {
-    const targetSet = new Set(reviewPuzzleIds(activeTabName() === "groups" ? selectedGroupParentId() : null));
+    const targetSet = new Set(reviewPuzzleIds());
     const sessions = [];
 
     (remoteSessions || []).forEach((session) => {
@@ -2865,34 +2291,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       unsubscribeSessions = null;
     }
     const tabName = activeTabName();
-    const targetIds = reviewPuzzleIds(tabName === "groups" ? selectedGroupParentId() : null);
+    const targetIds = reviewPuzzleIds();
     if (!sharedStoreReady() || !targetIds.length) return;
     unsubscribeSessions = subscribeRemoteSessionsForPuzzleGroup(targetIds, (sessions) => {
       mergeLocalAndRemoteSessions(sessions);
       if (activeTabName() === "merge") mergeSessions();
-      if (activeTabName() === "groups") renderGroupBoards();
     }, (error) => console.warn(error));
-  }
-
-  function startMyGroupPreviewSync() {
-    if (unsubscribeGroupPreview) {
-      unsubscribeGroupPreview();
-      unsubscribeGroupPreview = null;
-    }
-    if (teacherMode || lessonState.mode !== "group" || !sharedStoreReady() || !lessonState.puzzleId) {
-      renderMyGroupPreview([]);
-      return;
-    }
-    unsubscribeGroupPreview = subscribeRemoteSessionsForPuzzleGroup(reviewPuzzleIds(lessonState.puzzleId), (sessions) => {
-      renderMyGroupPreview(sessions.filter(sessionInCurrentLesson));
-    }, (error) => console.warn(error));
-  }
-
-  async function loadGroupSessions() {
-    els.reviewPuzzleSelect.value = selectedGroupParentId();
-    await loadSessions();
-    renderGroupBoards();
-    startSessionLiveSync();
   }
 
   function sortSessions(a, b) {
@@ -2981,18 +2385,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       name.textContent = session.studentName || "guest";
       const meta = document.createElement("div");
       meta.className = "session-meta";
-      appendBadge(meta, `${session.groupName || "1"}\uc870`);
       appendBadge(meta, session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911", session.submitted ? "good" : "");
       appendBadge(meta, session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc", session.solved ? "good" : "warn");
-      if (session.piece) appendBadge(meta, `${session.piece.row}-${session.piece.col}`);
       if (session.hintUsed) appendBadge(meta, "\ud78c\ud2b8 \uc0ac\uc6a9", "warn");
       appendBadge(meta, `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`);
-      appendBadge(meta, `\uce60\ud55c \uce78 ${stats.filled}\uac1c`);
-      appendBadge(meta, formatDuration(session.seconds));
-      if (formatUpdatedAt(session.updatedAt)) appendBadge(meta, formatUpdatedAt(session.updatedAt));
       button.appendChild(name);
       button.appendChild(meta);
-      button.appendChild(renderMiniGrid(session.state, { className: "session-thumb", minCell: 2, maxCell: 7 }));
       button.addEventListener("click", () => renderSessionPreview(session));
       button.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -3019,7 +2417,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const fragment = document.createDocumentFragment();
     const header = document.createElement("div");
     header.className = "progress-row header";
-    ["\uc774\ub984", "\uc870", "\uc0c1\ud0dc", "\uc9c4\ud589"].forEach((label) => {
+    ["\uc774\ub984", "\uc0c1\ud0dc", "\uc9c4\ud589", "\uc815\ud655\ub3c4"].forEach((label) => {
       const cell = document.createElement("span");
       cell.textContent = label;
       header.appendChild(cell);
@@ -3033,11 +2431,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       const name = document.createElement("strong");
       name.textContent = session.studentName || "guest";
       const status = document.createElement("span");
-      status.textContent = `${session.groupName || "1"}\uc870`;
+      status.textContent = session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911";
       const progress = document.createElement("span");
-      progress.textContent = session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589";
+      progress.textContent = session.solved ? "\uc815\ub2f5" : `${stats.fillRate}% \uc9c4\ud589`;
       const time = document.createElement("span");
-      time.textContent = `${stats.fillRate}%`;
+      time.textContent = stats.accuracy === null ? "-" : `\uc815\ud655\ub3c4 ${stats.accuracy}%`;
       [name, status, progress, time].forEach((cell) => row.appendChild(cell));
       fragment.appendChild(row);
     });
@@ -3065,90 +2463,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     detail.appendChild(summary);
     els.sessionPreview.appendChild(detail);
     els.sessionPreview.appendChild(renderMiniGrid(session.state, { interactive: false }));
-  }
-
-  function selectedGroupParentId() {
-    const selectedId = els.groupPuzzleSelect.value || lessonState.puzzleId || currentPuzzle.parentId || currentPuzzle.id;
-    const selected = puzzles.find((puzzle) => puzzle.id === selectedId);
-    return selected && selected.parentId ? selected.parentId : selectedId;
-  }
-
-  function combineGroupGrid(parent, groupName, sessions) {
-    const pieces = piecesForParent(parent.id);
-    const grid = makeBlankState(parent.grid);
-    let filledPieces = 0;
-    const used = [];
-
-    pieces.forEach((piecePuzzle) => {
-      const session = sessions.find((item) => {
-        return item.submitted &&
-          String(item.groupName || "1") === String(groupName) &&
-          item.puzzleId === piecePuzzle.id &&
-          Array.isArray(item.state);
-      });
-      if (!session) return;
-      filledPieces += 1;
-      used.push(session.studentName || "guest");
-      const piece = piecePuzzle.piece;
-      session.state.forEach((row, rowIndex) => {
-        row.forEach((value, colIndex) => {
-          const targetRow = piece.startRow + rowIndex;
-          const targetCol = piece.startCol + colIndex;
-          if (targetRow < grid.length && targetCol < grid[0].length) {
-            grid[targetRow][targetCol] = value === 1 ? 1 : 0;
-          }
-        });
-      });
-    });
-
-    return { grid, filledPieces, totalPieces: pieces.length, used };
-  }
-
-  function renderGroupBoards() {
-    const parent = puzzles.find((puzzle) => puzzle.id === selectedGroupParentId()) || currentPuzzle;
-    const fragment = document.createDocumentFragment();
-    for (let index = 1; index <= 6; index += 1) {
-      const groupName = String(index);
-      const result = combineGroupGrid(parent, groupName, loadedSessions);
-      const card = document.createElement("div");
-      card.className = "group-card";
-      const title = document.createElement("h3");
-      title.textContent = `${groupName}\uc870`;
-      const summary = document.createElement("div");
-      summary.className = "summary";
-      summary.textContent = result.totalPieces
-        ? `${result.filledPieces}/${result.totalPieces}\uac1c \uc870\uac01 \uc81c\ucd9c`
-        : "\uba3c\uc800 \uc870\uac01 \ud37c\uc990\uc744 \ucd94\uac00\ud558\uc138\uc694.";
-      card.appendChild(title);
-      card.appendChild(renderMiniGrid(result.grid, { className: "session-thumb", minCell: 2, maxCell: 8 }));
-      card.appendChild(summary);
-      fragment.appendChild(card);
-    }
-    els.groupBoards.replaceChildren(fragment);
-    els.groupSummary.textContent = `${parent.title} - 1\uc870\ubd80\ud130 6\uc870\uae4c\uc9c0 \uc2e4\uc2dc\uac04 \ud655\uc778 \uc911`;
-  }
-
-  function renderMyGroupPreview(sessions) {
-    if (teacherMode || lessonState.mode !== "group" || !lessonState.puzzleId) {
-      els.myGroupPreview.innerHTML = "";
-      return;
-    }
-    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
-    if (!parent || !piecesForParent(parent.id).length) {
-      els.myGroupPreview.innerHTML = "";
-      return;
-    }
-    const result = combineGroupGrid(parent, els.groupSelect.value || "1", sessions || []);
-    const fragment = document.createDocumentFragment();
-    const title = document.createElement("h3");
-    title.textContent = `\uc6b0\ub9ac ${els.groupSelect.value || "1"}\uc870 \uc644\uc131 \uadf8\ub9bc`;
-    const summary = document.createElement("div");
-    summary.className = "summary";
-    summary.textContent = `${result.filledPieces}/${result.totalPieces}\uac1c \uc870\uac01 \uc81c\ucd9c`;
-    fragment.appendChild(title);
-    fragment.appendChild(renderMiniGrid(result.grid, { minCell: 3, maxCell: 10 }));
-    fragment.appendChild(summary);
-    els.myGroupPreview.replaceChildren(fragment);
   }
 
   function mergeSessions() {
@@ -3182,192 +2496,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.mergeSummary.textContent = `${compatible.length}\uac1c \uacb0\uacfc\ub97c \ud569\uccd0 ${mergedGrid[0].length}x${mergedGrid.length} \ud37c\uc990\uc744 \ub9cc\ub4e4\uc5c8\uc2b5\ub2c8\ub2e4.`;
     els.mergePreview.innerHTML = "";
     els.mergePreview.appendChild(renderMiniGrid(mergedGrid, { interactive: false }));
-  }
-
-  function makePieceId(parentId, pieceSize, row, col) {
-    return `${parentId}-piece-${pieceSize}-${row}-${col}`.replace(/[^\w-]+/g, "_");
-  }
-
-  function splitSelectedPuzzle() {
-    const source = puzzles.find((puzzle) => puzzle.id === els.splitPuzzleSelect.value) || currentPuzzle;
-    const pieceSize = clampGridSize(els.pieceSize.value);
-    const rowPieces = Math.ceil(source.grid.length / pieceSize);
-    const colPieces = Math.ceil(source.grid[0].length / pieceSize);
-    splitPieces = [];
-
-    for (let pieceRow = 0; pieceRow < rowPieces; pieceRow += 1) {
-      for (let pieceCol = 0; pieceCol < colPieces; pieceCol += 1) {
-        const startRow = pieceRow * pieceSize;
-        const startCol = pieceCol * pieceSize;
-        const grid = source.grid.slice(startRow, startRow + pieceSize).map((row) => row.slice(startCol, startCol + pieceSize));
-        splitPieces.push({
-          id: makePieceId(source.id, pieceSize, pieceRow + 1, pieceCol + 1),
-          title: `${source.title} ${pieceRow + 1}-${pieceCol + 1}`,
-          grid: grid,
-          parentId: source.id,
-          parentTitle: source.title,
-          piece: {
-            row: pieceRow + 1,
-            col: pieceCol + 1,
-            rowPieces: rowPieces,
-            colPieces: colPieces,
-            startRow: startRow,
-            startCol: startCol,
-            width: grid[0].length,
-            height: grid.length,
-            parentWidth: source.grid[0].length,
-            parentHeight: source.grid.length,
-            pieceSize: pieceSize
-          }
-        });
-      }
-    }
-
-    renderSplitPieces(source);
-  }
-
-  function renderSplitPieces(source) {
-    els.piecePreview.innerHTML = "";
-    if (!splitPieces.length) return;
-
-    const header = document.createElement("h3");
-    header.textContent = `${source.title} -> ${splitPieces.length} pieces`;
-    els.piecePreview.appendChild(header);
-
-    const list = document.createElement("div");
-    list.className = "piece-list";
-    splitPieces.forEach((piece) => {
-      const item = document.createElement("div");
-      item.className = "piece-card";
-      const title = document.createElement("strong");
-      title.textContent = piece.title;
-      item.appendChild(title);
-      item.appendChild(renderMiniGrid(piece.grid, { interactive: false }));
-      list.appendChild(item);
-    });
-    els.piecePreview.appendChild(list);
-    els.pieceSummary.textContent = `${source.grid[0].length}x${source.grid.length} \ud37c\uc990\uc744 ${splitPieces.length}\uac1c \uc870\uac01\uc73c\ub85c \ub098\ub20c\uc2b5\ub2c8\ub2e4.`;
-  }
-
-  async function saveSplitPieces() {
-    if (!splitPieces.length) splitSelectedPuzzle();
-    for (const piece of splitPieces) {
-      saveLocalCustomPuzzle(piece);
-      if (sharedStoreReady()) {
-        try {
-          await saveRemotePuzzle(piece.id, {
-            title: piece.title,
-            grid: piece.grid,
-            width: piece.grid[0].length,
-            height: piece.grid.length,
-            parentId: piece.parentId,
-            parentTitle: piece.parentTitle,
-            piece: piece.piece,
-            createdAt: serverTimestamp()
-          });
-        } catch (error) {
-          console.warn(error);
-        }
-      }
-    }
-    await loadPuzzles();
-    if (!sharedStoreReady()) {
-      els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01\uc744 \ub0b4 \ucef4\ud4e8\ud130\uc5d0\ub9cc \uc800\uc7a5\ud588\uc2b5\ub2c8\ub2e4. \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc774\ub824\uba74 Firebase \uc124\uc815\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.`;
-      setSaveStatus("\ub85c\uceec \uc800\uc7a5\ub428(\uacf5\uc720 \uc548 \ub428)", "error");
-      return;
-    }
-    els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \ubaa9\ub85d\uc5d0 \ucd94\uac00\ud588\uc2b5\ub2c8\ub2e4.`;
-    setSaveStatus(text.savedPuzzle, "online");
-  }
-
-  async function loadSessionsForPuzzleId(puzzleId) {
-    const sessions = [];
-    const seen = new Set();
-
-    localSessionIndex().forEach((key) => {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      try {
-        const data = JSON.parse(raw);
-        if (data.puzzleId === puzzleId && Array.isArray(data.state)) {
-          const id = `local:${key}`;
-          sessions.push({ id, source: "local", ...data });
-          seen.add(id);
-        }
-      } catch (error) {
-        console.warn(error);
-      }
-    });
-
-    if (sharedStoreReady()) {
-      try {
-        const remoteSessions = await loadRemoteSessionsForPuzzle(puzzleId);
-        remoteSessions.forEach((session) => {
-          if (!seen.has(session.id) && Array.isArray(session.state)) sessions.push(session);
-        });
-      } catch (error) {
-        console.warn(error);
-      }
-    }
-
-    return sessions.sort(sortSessions);
-  }
-
-  async function combinePieceSessions() {
-    const parent = puzzles.find((puzzle) => puzzle.id === els.combineParentSelect.value) || currentPuzzle;
-    const pieces = puzzles.filter((puzzle) => puzzle.parentId === parent.id && puzzle.piece);
-    const nextCombinedGrid = makeBlankState(parent.grid);
-
-    if (!pieces.length) {
-      els.combinePieceSummary.textContent = "\uba3c\uc800 \uc6d0\ubcf8 \ud37c\uc990\uc744 \uc870\uac01\uc73c\ub85c \ucd94\uac00\ud558\uc138\uc694.";
-      els.combinedPiecePreview.innerHTML = "";
-      combinedPieceGrid = null;
-      return;
-    }
-
-    let filledPieces = 0;
-    const used = [];
-    const missing = [];
-    for (const piecePuzzle of pieces) {
-      const sessions = await loadSessionsForPuzzleId(piecePuzzle.id);
-      const session = sessions.find((item) => item.submitted) || null;
-      if (!session) {
-        missing.push(piecePuzzle.title);
-        continue;
-      }
-      filledPieces += 1;
-      used.push(`${piecePuzzle.title}: ${session.studentName || "guest"}`);
-      const piece = piecePuzzle.piece;
-      session.state.forEach((row, rowIndex) => {
-        row.forEach((value, colIndex) => {
-          const targetRow = piece.startRow + rowIndex;
-          const targetCol = piece.startCol + colIndex;
-          if (targetRow < nextCombinedGrid.length && targetCol < nextCombinedGrid[0].length) {
-            nextCombinedGrid[targetRow][targetCol] = value === 1 ? 1 : 0;
-          }
-        });
-      });
-    }
-
-    if (!filledPieces) {
-      els.combinePieceSummary.textContent = text.noSessions;
-      combinedPieceGrid = null;
-      els.combinedPiecePreview.innerHTML = "";
-      return;
-    }
-
-    combinedPieceGrid = nextCombinedGrid;
-    const fragment = document.createDocumentFragment();
-    const title = document.createElement("h3");
-    title.textContent = `${parent.title} \uc870\uac01 \ud569\uce58\uae30`;
-    fragment.appendChild(title);
-    fragment.appendChild(renderMiniGrid(combinedPieceGrid, { interactive: false }));
-    const usedList = document.createElement("div");
-    usedList.className = "summary";
-    usedList.textContent = used.join(" / ");
-    fragment.appendChild(usedList);
-    els.combinedPiecePreview.replaceChildren(fragment);
-    els.combinePieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \uc911 ${filledPieces}\uac1c \uc81c\ucd9c \ud655\uc778, ${missing.length}\uac1c \ubbf8\uc81c\ucd9c\uc785\ub2c8\ub2e4.`;
   }
 
   async function savePuzzleFromGrid(grid, title, options) {
@@ -3605,19 +2733,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function liveRefreshTeacherViews() {
     if (!teacherMode || liveRefreshBusy) return;
     const tabName = activeTabName();
-    if (!["review", "groups", "merge", "pieces"].includes(tabName)) return;
+    if (!["review", "merge"].includes(tabName)) return;
     liveRefreshBusy = true;
     try {
       if (tabName === "review") {
         await loadSessions();
-      } else if (tabName === "groups") {
-        await loadGroupSessions();
       } else if (tabName === "merge") {
         els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
         await loadSessions();
         mergeSessions();
-      } else if (tabName === "pieces") {
-        await combinePieceSessions();
       }
     } catch (error) {
       console.warn(error);
@@ -3632,9 +2756,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.markTool.addEventListener("click", () => setTool("mark"));
     els.shareQrBtn.addEventListener("click", openQrDialog);
     els.teacherModeBtn.addEventListener("click", toggleTeacherMode);
-    els.startIndividualLessonBtn.addEventListener("click", startIndividualLesson);
-    els.startGroupLessonBtn.addEventListener("click", startGroupLesson);
-    els.closeLessonBtn.addEventListener("click", closeLesson);
     els.closeQrBtn.addEventListener("click", closeQrDialog);
     els.copyQrUrlBtn.addEventListener("click", copyQrUrl);
     els.qrDialog.addEventListener("click", (event) => {
@@ -3650,31 +2771,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.reviewPuzzleSelect.addEventListener("change", () => {
       if (els.reviewPuzzleSelect.value !== "__all__") {
         els.mergePuzzleSelect.value = els.reviewPuzzleSelect.value;
-        els.groupPuzzleSelect.value = els.reviewPuzzleSelect.value;
       }
       loadSessions();
       startSessionLiveSync();
     });
-    els.autoGroupBtn.addEventListener("click", autoGroupRoster);
-    els.studentRosterInput.addEventListener("input", () => {
-      localStorage.setItem("nonogramStudentRosterText", els.studentRosterInput.value);
-      const names = parseRosterNames(els.studentRosterInput.value);
-      if (names.length) renderRosterSummary(buildRosterGroups(names), `${names.length}\uba85 \uc785\ub825\ub428`);
-      else els.rosterSummary.innerHTML = "";
-    });
-    els.groupPuzzleSelect.addEventListener("change", loadGroupSessions);
     els.mergePuzzleSelect.addEventListener("change", () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
       loadSessions();
       startSessionLiveSync();
-    });
-    els.splitPuzzleSelect.addEventListener("change", () => {
-      splitPieces = [];
-      els.piecePreview.innerHTML = "";
-    });
-    els.combineParentSelect.addEventListener("change", () => {
-      combinedPieceGrid = null;
-      els.combinedPiecePreview.innerHTML = "";
     });
     els.studentName.addEventListener("change", () => {
       state = makeBlankState(currentPuzzle.grid);
@@ -3684,25 +2788,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       hintUsed = false;
       loadProgress();
       renderBoard();
-      applyLessonState();
-    });
-    els.studentName.addEventListener("input", () => {
-      window.clearTimeout(nameAssignTimer);
-      nameAssignTimer = window.setTimeout(applyLessonState, 350);
-    });
-    els.groupSelect.addEventListener("change", () => {
-      state = makeBlankState(currentPuzzle.grid);
-      seconds = 0;
-      startedAt = Date.now();
-      timerStopped = false;
-      hintUsed = false;
-      loadProgress();
-      renderBoard();
-      applyLessonState();
-      startMyGroupPreviewSync();
     });
     els.loadSessionsBtn.addEventListener("click", loadSessions);
-    els.loadGroupsBtn.addEventListener("click", loadGroupSessions);
     els.deleteVisibleSessionsBtn.addEventListener("click", deleteVisibleSessions);
     els.mergeBtn.addEventListener("click", async () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
@@ -3710,16 +2797,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       mergeSessions();
     });
     els.saveMergedBtn.addEventListener("click", () => savePuzzleFromGrid(mergedGrid, els.mergedPuzzleTitle.value.trim() || "\ud569\uccd0\uc9c4 \ud37c\uc990"));
-    els.splitPuzzleBtn.addEventListener("click", splitSelectedPuzzle);
-    els.savePiecesBtn.addEventListener("click", saveSplitPieces);
-    els.deletePiecesBtn.addEventListener("click", deletePiecesForSelectedParent);
-    els.deleteAllPiecesBtn.addEventListener("click", deleteAllPieces);
-    els.combinePiecesBtn.addEventListener("click", combinePieceSessions);
-    els.saveCombinedBtn.addEventListener("click", () => {
-      const parent = puzzles.find((puzzle) => puzzle.id === els.combineParentSelect.value);
-      const title = parent ? `${parent.title} \uc870\uac01 \ud569\uce58\uae30` : "\uc870\uac01 \ud569\uce58\uae30";
-      savePuzzleFromGrid(combinedPieceGrid, title);
-    });
     els.imageInput.addEventListener("change", (event) => handleImageFile(event.target.files[0]));
     els.convertBtn.addEventListener("click", convertImageToGrid);
     els.saveConvertedBtn.addEventListener("click", () => savePuzzleFromGrid(convertedGrid, els.convertedPuzzleTitle.value.trim() || "\uc774\ubbf8\uc9c0 \ud37c\uc990"));
@@ -3737,11 +2814,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function init() {
     setupFirebase();
     bindEvents();
-    els.studentRosterInput.value = localStorage.getItem("nonogramStudentRosterText") || "";
-    if (els.studentRosterInput.value) {
-      const names = parseRosterNames(els.studentRosterInput.value);
-      renderRosterSummary(buildRosterGroups(names), `${names.length}\uba85 \uc785\ub825\ub428`);
-    }
     await loadPuzzles();
     if (assignedPuzzleId && puzzles.some((puzzle) => puzzle.id === assignedPuzzleId)) {
       currentPuzzle = puzzles.find((puzzle) => puzzle.id === assignedPuzzleId);
@@ -3753,7 +2825,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     applyMode();
     renderBoard();
     startPuzzleLiveSync();
-    startLessonLiveSync();
     startSessionLiveSync();
     window.setInterval(tick, 1000);
     tick();
