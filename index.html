@@ -602,6 +602,31 @@ code {
   overflow: auto;
 }
 
+.piece-grid {
+  min-width: 0;
+  overflow: auto;
+}
+
+.piece-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.piece-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.piece-card strong {
+  font-size: 13px;
+}
+
 .mini-grid {
   display: grid;
   justify-content: start;
@@ -746,6 +771,7 @@ code {
       <button class="tab active" data-tab="play" type="button">&#54400;&#44592;</button>
       <button class="tab teacher-only" data-tab="review" type="button">&#54869;&#51064;</button>
       <button class="tab teacher-only" data-tab="merge" type="button">&#54633;&#52824;&#44592;</button>
+      <button class="tab teacher-only" data-tab="pieces" type="button">&#51312;&#44033;</button>
       <button class="tab teacher-only" data-tab="convert" type="button">&#51060;&#48120;&#51648; &#48320;&#54872;</button>
     </nav>
 
@@ -871,6 +897,49 @@ code {
       </section>
     </section>
 
+    <section id="piecesTab" class="tab-panel">
+      <section class="workspace-grid">
+        <aside class="panel">
+          <h2>&#53360; &#47196;&#51649; &#51312;&#44033;&#45236;&#44592;</h2>
+          <label class="field">
+            <span>&#45208;&#45580; &#50896;&#48376; &#54140;&#51600;</span>
+            <select id="splitPuzzleSelect"></select>
+          </label>
+          <label class="field">
+            <span>&#51312;&#44033; &#53356;&#44592;</span>
+            <select id="pieceSize">
+              <option value="5">5x5</option>
+              <option value="8">8x8</option>
+              <option value="10" selected>10x10</option>
+              <option value="20">20x20</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button id="splitPuzzleBtn" type="button">&#51312;&#44033; &#48120;&#47532;&#48372;&#44592;</button>
+            <button id="savePiecesBtn" class="secondary" type="button">&#51312;&#44033; &#54140;&#51600; &#52628;&#44032;</button>
+            <button id="deletePiecesBtn" class="danger" type="button">&#51060; &#50896;&#48376;&#51032; &#51312;&#44033; &#49325;&#51228;</button>
+            <button id="deleteAllPiecesBtn" class="danger" type="button">&#47784;&#46304; &#51312;&#44033; &#49325;&#51228;</button>
+          </div>
+          <div id="pieceSummary" class="summary">100x100&#51012; 10x10&#51004;&#47196; &#45208;&#45572;&#47732; 100&#44060; &#51312;&#44033;&#51060; &#49373;&#49457;&#46121;&#45768;&#45796;.</div>
+
+          <h2 class="section-title">&#51312;&#44033; &#44208;&#44284; &#48537;&#51060;&#44592;</h2>
+          <label class="field">
+            <span>&#48537;&#51060;&#44592; &#50896;&#48376;</span>
+            <select id="combineParentSelect"></select>
+          </label>
+          <div class="actions">
+            <button id="combinePiecesBtn" type="button">&#54617;&#49373; &#51312;&#44033; &#48537;&#51060;&#44592;</button>
+            <button id="saveCombinedBtn" class="secondary" type="button">&#54633;&#52432;&#51652; &#54140;&#51600; &#52628;&#44032;</button>
+          </div>
+          <div id="combinePieceSummary" class="summary">&#51312;&#44033; &#54140;&#51600;&#51012; &#54617;&#49373;&#46308;&#51060; &#54400;&#47732; &#50896;&#47000; &#50948;&#52824;&#50640; &#48537;&#51068; &#49688; &#51080;&#49845;&#45768;&#45796;.</div>
+        </aside>
+        <section class="panel wide">
+          <div id="piecePreview" class="piece-grid"></div>
+          <div id="combinedPiecePreview" class="preview-box"></div>
+        </section>
+      </section>
+    </section>
+
 
     <section id="convertTab" class="tab-panel">
       <section class="workspace-grid">
@@ -926,6 +995,21 @@ code {
     </div>
     <input id="qrUrl" type="text" readonly>
     <button id="copyQrUrlBtn" type="button">&#51452;&#49548; &#48373;&#49324;</button>
+  </dialog>
+
+  <dialog id="teacherCodeDialog" class="qr-dialog">
+    <form id="teacherCodeForm">
+      <div class="qr-head">
+        <h2>&#44368;&#49324; &#53076;&#46300;</h2>
+        <button id="closeTeacherCodeBtn" class="secondary icon-btn" type="button" aria-label="close">x</button>
+      </div>
+      <label class="field">
+        <span>&#44368;&#49324; &#53076;&#46300;&#47484; &#51077;&#47141;&#54616;&#49464;&#50836;.</span>
+        <input id="teacherCodeInput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" required>
+      </label>
+      <div id="teacherCodeError" class="message error" hidden>&#44368;&#49324; &#53076;&#46300;&#44032; &#45796;&#47493;&#45768;&#45796;.</div>
+      <button type="submit">&#54869;&#51064;</button>
+    </form>
   </dialog>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -1067,11 +1151,29 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     puzzleSelect: document.getElementById("puzzleSelect"),
     reviewPuzzleSelect: document.getElementById("reviewPuzzleSelect"),
     mergePuzzleSelect: document.getElementById("mergePuzzleSelect"),
+    splitPuzzleSelect: document.getElementById("splitPuzzleSelect"),
+    pieceSize: document.getElementById("pieceSize"),
+    splitPuzzleBtn: document.getElementById("splitPuzzleBtn"),
+    savePiecesBtn: document.getElementById("savePiecesBtn"),
+    deletePiecesBtn: document.getElementById("deletePiecesBtn"),
+    deleteAllPiecesBtn: document.getElementById("deleteAllPiecesBtn"),
+    pieceSummary: document.getElementById("pieceSummary"),
+    piecePreview: document.getElementById("piecePreview"),
+    combineParentSelect: document.getElementById("combineParentSelect"),
+    combinePiecesBtn: document.getElementById("combinePiecesBtn"),
+    saveCombinedBtn: document.getElementById("saveCombinedBtn"),
+    combinePieceSummary: document.getElementById("combinePieceSummary"),
+    combinedPiecePreview: document.getElementById("combinedPiecePreview"),
     studentName: document.getElementById("studentName"),
     connectionStatus: document.getElementById("connectionStatus"),
     saveStatus: document.getElementById("saveStatus"),
     shareQrBtn: document.getElementById("shareQrBtn"),
     teacherModeBtn: document.getElementById("teacherModeBtn"),
+    teacherCodeDialog: document.getElementById("teacherCodeDialog"),
+    teacherCodeForm: document.getElementById("teacherCodeForm"),
+    teacherCodeInput: document.getElementById("teacherCodeInput"),
+    teacherCodeError: document.getElementById("teacherCodeError"),
+    closeTeacherCodeBtn: document.getElementById("closeTeacherCodeBtn"),
     qrDialog: document.getElementById("qrDialog"),
     qrImage: document.getElementById("qrImage"),
     qrUrl: document.getElementById("qrUrl"),
@@ -1114,7 +1216,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-13-simple-class-1";
+  const APP_VERSION = "2026-07-13-pieces-restored-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1129,6 +1231,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let loadedSessions = [];
   let mergedGrid = null;
   let convertedGrid = null;
+  let splitPieces = [];
+  let combinedPieceGrid = null;
   let uploadedImage = null;
   let liveRefreshBusy = false;
   let unsubscribePuzzles = null;
@@ -1413,14 +1517,36 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       applyMode();
       return;
     }
-    const code = window.prompt("\uad50\uc0ac \ucf54\ub4dc\ub97c \uc785\ub825\ud558\uc138\uc694.");
-    if (code === "2026") {
+    els.teacherCodeInput.value = "";
+    els.teacherCodeError.hidden = true;
+    if (els.teacherCodeDialog.showModal) {
+      els.teacherCodeDialog.showModal();
+      window.setTimeout(() => els.teacherCodeInput.focus(), 0);
+    } else {
+      els.teacherCodeDialog.setAttribute("open", "open");
+      els.teacherCodeInput.focus();
+    }
+  }
+
+  function closeTeacherCodeDialog() {
+    if (els.teacherCodeDialog.close) {
+      els.teacherCodeDialog.close();
+    } else {
+      els.teacherCodeDialog.removeAttribute("open");
+    }
+  }
+
+  function submitTeacherCode(event) {
+    event.preventDefault();
+    if (els.teacherCodeInput.value === "0704") {
       teacherMode = true;
       localStorage.setItem("nonogramTeacherMode", "1");
+      closeTeacherCodeDialog();
       applyMode();
-    } else if (code !== null) {
-      window.alert("\uad50\uc0ac \ucf54\ub4dc\uac00 \ub2e4\ub985\ub2c8\ub2e4.");
+      return;
     }
+    els.teacherCodeError.hidden = false;
+    els.teacherCodeInput.select();
   }
 
   function closeQrDialog() {
@@ -1524,7 +1650,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     (remotePuzzles || []).forEach((puzzle) => byId.set(puzzle.id, puzzle));
 
     const previousId = currentPuzzle ? currentPuzzle.id : "";
-    puzzles = Array.from(byId.values()).filter((puzzle) => !puzzle.piece);
+    puzzles = Array.from(byId.values());
     currentPuzzle = puzzles.find((puzzle) => puzzle.id === previousId) || puzzles[0];
     hydratePuzzleSelects();
     applyLessonState();
@@ -1559,7 +1685,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function hydratePuzzleSelects() {
-    [els.puzzleSelect, els.reviewPuzzleSelect, els.mergePuzzleSelect].forEach((select) => {
+    [els.puzzleSelect, els.reviewPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
       const selected = select.value;
       select.innerHTML = "";
       if (select === els.reviewPuzzleSelect) {
@@ -1581,9 +1707,28 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       }
     });
 
+    hydrateParentSelect();
     els.puzzleSelect.value = currentPuzzle.id;
     if (els.reviewPuzzleSelect.value !== "__all__") els.reviewPuzzleSelect.value = currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
+    els.splitPuzzleSelect.value = currentPuzzle.parentId || currentPuzzle.id;
+  }
+
+  function hydrateParentSelect() {
+    const selected = els.combineParentSelect.value;
+    const parents = puzzles.filter((puzzle) => !puzzle.parentId);
+    els.combineParentSelect.innerHTML = "";
+    parents.forEach((puzzle) => {
+      const option = document.createElement("option");
+      option.value = puzzle.id;
+      option.textContent = `${puzzle.title} (${puzzle.grid[0].length}x${puzzle.grid.length})`;
+      els.combineParentSelect.appendChild(option);
+    });
+    if (parents.some((puzzle) => puzzle.id === selected)) {
+      els.combineParentSelect.value = selected;
+    } else if (currentPuzzle && !currentPuzzle.parentId) {
+      els.combineParentSelect.value = currentPuzzle.id;
+    }
   }
 
   function cellSizeFor(grid) {
@@ -2129,6 +2274,48 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.message.textContent = "\uc120\ud0dd\ud55c \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.";
   }
 
+  async function deletePiecesForSelectedParent() {
+    const parentId = els.combineParentSelect.value || els.splitPuzzleSelect.value;
+    const parent = puzzles.find((puzzle) => puzzle.id === parentId);
+    const pieces = puzzles.filter((puzzle) => puzzle.parentId === parentId && !isBuiltInPuzzle(puzzle.id));
+
+    if (!parent || !pieces.length) {
+      els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
+
+    const ok = !window.confirm || window.confirm(`"${parent.title}"\uc758 \uc870\uac01 ${pieces.length}\uac1c\ub97c \uc9c0\uc6b8\uae4c\uc694?`);
+    if (!ok) return;
+
+    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
+    splitPieces = [];
+    combinedPieceGrid = null;
+    els.piecePreview.innerHTML = "";
+    els.combinedPiecePreview.innerHTML = "";
+    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
+    els.combinePieceSummary.textContent = "\uc870\uac01 \ud37c\uc990\uc744 \ub2e4\uc2dc \ucd94\uac00\ud558\uba74 \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc5ec\uc904 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
+  }
+
+  async function deleteAllPieces() {
+    const pieces = puzzles.filter((puzzle) => puzzle.parentId && !isBuiltInPuzzle(puzzle.id));
+
+    if (!pieces.length) {
+      els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
+      return;
+    }
+
+    const ok = !window.confirm || window.confirm(`\ubaa8\ub4e0 \uc870\uac01 \ud37c\uc990 ${pieces.length}\uac1c\uc640 \uad00\ub828 \ud480\uc774 \uae30\ub85d\uc744 \uc804\ubd80 \uc9c0\uc6b8\uae4c\uc694?`);
+    if (!ok) return;
+
+    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
+    splitPieces = [];
+    combinedPieceGrid = null;
+    els.piecePreview.innerHTML = "";
+    els.combinedPiecePreview.innerHTML = "";
+    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc804\ubd80 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
+    els.combinePieceSummary.textContent = "\uc870\uac01 \ud480\uc774 \uae30\ub85d\ub3c4 \ud568\uaed8 \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.";
+  }
+
   async function deleteAllGenerated() {
     const generated = puzzles.filter((puzzle) => !isBuiltInPuzzle(puzzle.id));
 
@@ -2498,6 +2685,192 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.mergePreview.appendChild(renderMiniGrid(mergedGrid, { interactive: false }));
   }
 
+  function makePieceId(parentId, pieceSize, row, col) {
+    return `${parentId}-piece-${pieceSize}-${row}-${col}`.replace(/[^\w-]+/g, "_");
+  }
+
+  function splitSelectedPuzzle() {
+    const source = puzzles.find((puzzle) => puzzle.id === els.splitPuzzleSelect.value) || currentPuzzle;
+    const pieceSize = clampGridSize(els.pieceSize.value);
+    const rowPieces = Math.ceil(source.grid.length / pieceSize);
+    const colPieces = Math.ceil(source.grid[0].length / pieceSize);
+    splitPieces = [];
+
+    for (let pieceRow = 0; pieceRow < rowPieces; pieceRow += 1) {
+      for (let pieceCol = 0; pieceCol < colPieces; pieceCol += 1) {
+        const startRow = pieceRow * pieceSize;
+        const startCol = pieceCol * pieceSize;
+        const grid = source.grid.slice(startRow, startRow + pieceSize).map((row) => row.slice(startCol, startCol + pieceSize));
+        splitPieces.push({
+          id: makePieceId(source.id, pieceSize, pieceRow + 1, pieceCol + 1),
+          title: `${source.title} ${pieceRow + 1}-${pieceCol + 1}`,
+          grid: grid,
+          parentId: source.id,
+          parentTitle: source.title,
+          piece: {
+            row: pieceRow + 1,
+            col: pieceCol + 1,
+            rowPieces: rowPieces,
+            colPieces: colPieces,
+            startRow: startRow,
+            startCol: startCol,
+            width: grid[0].length,
+            height: grid.length,
+            parentWidth: source.grid[0].length,
+            parentHeight: source.grid.length,
+            pieceSize: pieceSize
+          }
+        });
+      }
+    }
+
+    renderSplitPieces(source);
+  }
+
+  function renderSplitPieces(source) {
+    els.piecePreview.innerHTML = "";
+    if (!splitPieces.length) return;
+
+    const header = document.createElement("h3");
+    header.textContent = `${source.title} -> ${splitPieces.length} pieces`;
+    els.piecePreview.appendChild(header);
+
+    const list = document.createElement("div");
+    list.className = "piece-list";
+    splitPieces.forEach((piece) => {
+      const item = document.createElement("div");
+      item.className = "piece-card";
+      const title = document.createElement("strong");
+      title.textContent = piece.title;
+      item.appendChild(title);
+      item.appendChild(renderMiniGrid(piece.grid, { interactive: false }));
+      list.appendChild(item);
+    });
+    els.piecePreview.appendChild(list);
+    els.pieceSummary.textContent = `${source.grid[0].length}x${source.grid.length} \ud37c\uc990\uc744 ${splitPieces.length}\uac1c \uc870\uac01\uc73c\ub85c \ub098\ub20c\uc2b5\ub2c8\ub2e4.`;
+  }
+
+  async function saveSplitPieces() {
+    if (!splitPieces.length) splitSelectedPuzzle();
+    for (const piece of splitPieces) {
+      saveLocalCustomPuzzle(piece);
+      if (sharedStoreReady()) {
+        try {
+          await saveRemotePuzzle(piece.id, {
+            title: piece.title,
+            grid: piece.grid,
+            width: piece.grid[0].length,
+            height: piece.grid.length,
+            parentId: piece.parentId,
+            parentTitle: piece.parentTitle,
+            piece: piece.piece,
+            createdAt: serverTimestamp()
+          });
+        } catch (error) {
+          console.warn(error);
+        }
+      }
+    }
+    await loadPuzzles();
+    if (!sharedStoreReady()) {
+      els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01\uc744 \ub0b4 \ucef4\ud4e8\ud130\uc5d0\ub9cc \uc800\uc7a5\ud588\uc2b5\ub2c8\ub2e4. \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc774\ub824\uba74 Firebase \uc124\uc815\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.`;
+      setSaveStatus("\ub85c\uceec \uc800\uc7a5\ub428(\uacf5\uc720 \uc548 \ub428)", "error");
+      return;
+    }
+    els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \ubaa9\ub85d\uc5d0 \ucd94\uac00\ud588\uc2b5\ub2c8\ub2e4.`;
+    setSaveStatus(text.savedPuzzle, "online");
+  }
+
+  async function loadSessionsForPuzzleId(puzzleId) {
+    const sessions = [];
+    const seen = new Set();
+
+    localSessionIndex().forEach((key) => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        if (data.puzzleId === puzzleId && Array.isArray(data.state)) {
+          const id = `local:${key}`;
+          sessions.push({ id, source: "local", ...data });
+          seen.add(id);
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+    });
+
+    if (sharedStoreReady()) {
+      try {
+        const remoteSessions = await loadRemoteSessionsForPuzzle(puzzleId);
+        remoteSessions.forEach((session) => {
+          if (!seen.has(session.id) && Array.isArray(session.state)) sessions.push(session);
+        });
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    return sessions.sort(sortSessions);
+  }
+
+  async function combinePieceSessions() {
+    const parent = puzzles.find((puzzle) => puzzle.id === els.combineParentSelect.value) || currentPuzzle;
+    const pieces = puzzles.filter((puzzle) => puzzle.parentId === parent.id && puzzle.piece);
+    const nextCombinedGrid = makeBlankState(parent.grid);
+
+    if (!pieces.length) {
+      els.combinePieceSummary.textContent = "\uba3c\uc800 \uc6d0\ubcf8 \ud37c\uc990\uc744 \uc870\uac01\uc73c\ub85c \ucd94\uac00\ud558\uc138\uc694.";
+      els.combinedPiecePreview.innerHTML = "";
+      combinedPieceGrid = null;
+      return;
+    }
+
+    let filledPieces = 0;
+    const used = [];
+    const missing = [];
+    for (const piecePuzzle of pieces) {
+      const sessions = await loadSessionsForPuzzleId(piecePuzzle.id);
+      const session = sessions.find((item) => item.submitted) || null;
+      if (!session) {
+        missing.push(piecePuzzle.title);
+        continue;
+      }
+      filledPieces += 1;
+      used.push(`${piecePuzzle.title}: ${session.studentName || "guest"}`);
+      const piece = piecePuzzle.piece;
+      session.state.forEach((row, rowIndex) => {
+        row.forEach((value, colIndex) => {
+          const targetRow = piece.startRow + rowIndex;
+          const targetCol = piece.startCol + colIndex;
+          if (targetRow < nextCombinedGrid.length && targetCol < nextCombinedGrid[0].length) {
+            nextCombinedGrid[targetRow][targetCol] = value === 1 ? 1 : 0;
+          }
+        });
+      });
+    }
+
+    if (!filledPieces) {
+      els.combinePieceSummary.textContent = text.noSessions;
+      combinedPieceGrid = null;
+      els.combinedPiecePreview.innerHTML = "";
+      return;
+    }
+
+    combinedPieceGrid = nextCombinedGrid;
+    const fragment = document.createDocumentFragment();
+    const title = document.createElement("h3");
+    title.textContent = `${parent.title} \uc870\uac01 \ud569\uce58\uae30`;
+    fragment.appendChild(title);
+    fragment.appendChild(renderMiniGrid(combinedPieceGrid, { interactive: false }));
+    const usedList = document.createElement("div");
+    usedList.className = "summary";
+    usedList.textContent = used.join(" / ");
+    fragment.appendChild(usedList);
+    els.combinedPiecePreview.replaceChildren(fragment);
+    els.combinePieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \uc911 ${filledPieces}\uac1c \uc81c\ucd9c \ud655\uc778, ${missing.length}\uac1c \ubbf8\uc81c\ucd9c\uc785\ub2c8\ub2e4.`;
+  }
+
   async function savePuzzleFromGrid(grid, title, options) {
     if (!grid) return;
     const meta = options || {};
@@ -2733,7 +3106,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function liveRefreshTeacherViews() {
     if (!teacherMode || liveRefreshBusy) return;
     const tabName = activeTabName();
-    if (!["review", "merge"].includes(tabName)) return;
+    if (!["review", "merge", "pieces"].includes(tabName)) return;
     liveRefreshBusy = true;
     try {
       if (tabName === "review") {
@@ -2742,6 +3115,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
         await loadSessions();
         mergeSessions();
+      } else if (tabName === "pieces") {
+        await combinePieceSessions();
       }
     } catch (error) {
       console.warn(error);
@@ -2756,6 +3131,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.markTool.addEventListener("click", () => setTool("mark"));
     els.shareQrBtn.addEventListener("click", openQrDialog);
     els.teacherModeBtn.addEventListener("click", toggleTeacherMode);
+    els.teacherCodeForm.addEventListener("submit", submitTeacherCode);
+    els.closeTeacherCodeBtn.addEventListener("click", closeTeacherCodeDialog);
+    els.teacherCodeInput.addEventListener("input", () => {
+      els.teacherCodeError.hidden = true;
+    });
+    els.teacherCodeDialog.addEventListener("click", (event) => {
+      if (event.target === els.teacherCodeDialog) closeTeacherCodeDialog();
+    });
     els.closeQrBtn.addEventListener("click", closeQrDialog);
     els.copyQrUrlBtn.addEventListener("click", copyQrUrl);
     els.qrDialog.addEventListener("click", (event) => {
@@ -2780,6 +3163,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       loadSessions();
       startSessionLiveSync();
     });
+    els.splitPuzzleSelect.addEventListener("change", () => {
+      splitPieces = [];
+      els.piecePreview.innerHTML = "";
+    });
+    els.combineParentSelect.addEventListener("change", () => {
+      combinedPieceGrid = null;
+      els.combinedPiecePreview.innerHTML = "";
+    });
     els.studentName.addEventListener("change", () => {
       state = makeBlankState(currentPuzzle.grid);
       seconds = 0;
@@ -2797,6 +3188,16 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       mergeSessions();
     });
     els.saveMergedBtn.addEventListener("click", () => savePuzzleFromGrid(mergedGrid, els.mergedPuzzleTitle.value.trim() || "\ud569\uccd0\uc9c4 \ud37c\uc990"));
+    els.splitPuzzleBtn.addEventListener("click", splitSelectedPuzzle);
+    els.savePiecesBtn.addEventListener("click", saveSplitPieces);
+    els.deletePiecesBtn.addEventListener("click", deletePiecesForSelectedParent);
+    els.deleteAllPiecesBtn.addEventListener("click", deleteAllPieces);
+    els.combinePiecesBtn.addEventListener("click", combinePieceSessions);
+    els.saveCombinedBtn.addEventListener("click", () => {
+      const parent = puzzles.find((puzzle) => puzzle.id === els.combineParentSelect.value);
+      const title = parent ? `${parent.title} \uc870\uac01 \ud569\uce58\uae30` : "\uc870\uac01 \ud569\uce58\uae30";
+      savePuzzleFromGrid(combinedPieceGrid, title);
+    });
     els.imageInput.addEventListener("change", (event) => handleImageFile(event.target.files[0]));
     els.convertBtn.addEventListener("click", convertImageToGrid);
     els.saveConvertedBtn.addEventListener("click", () => savePuzzleFromGrid(convertedGrid, els.convertedPuzzleTitle.value.trim() || "\uc774\ubbf8\uc9c0 \ud37c\uc990"));
