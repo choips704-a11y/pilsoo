@@ -453,7 +453,7 @@ code {
 
 .session-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
   align-items: start;
@@ -1219,7 +1219,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-12-group-view-1";
+  const APP_VERSION = "2026-07-13-roster-groups-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1242,7 +1242,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let unsubscribeSessions = null;
   let unsubscribeGroupPreview = null;
   let unsubscribeLesson = null;
-  let lessonState = { open: true, puzzleId: "", title: "" };
+  let lessonState = { open: true, puzzleId: "", title: "", runId: "" };
   let assignedByLesson = false;
   let nameAssignTimer = null;
   let dragPaint = null;
@@ -1408,6 +1408,28 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return null;
   }
 
+  async function loadRemoteSessionsForPuzzleGroup(puzzleIds) {
+    const idSet = new Set(puzzleIds);
+    if (rtdb) {
+      const snapshot = await rtdb.ref("nonogramSessions").once("value");
+      return snapshotToList(snapshot)
+        .map((item) => ({ id: `firebase:${item.id}`, source: "firebase", ...item.data }))
+        .filter((session) => idSet.has(session.puzzleId) && Array.isArray(session.state));
+    }
+    if (db) {
+      const snapshot = await db.collection("nonogramSessions").get();
+      const sessions = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data && idSet.has(data.puzzleId) && Array.isArray(data.state)) {
+          sessions.push({ id: `firebase:${doc.id}`, source: "firebase", ...data });
+        }
+      });
+      return sessions;
+    }
+    return [];
+  }
+
   async function saveRemoteSession(id, payload) {
     if (rtdb) {
       await rtdb.ref(`nonogramSessions/${id}`).update(payload);
@@ -1447,6 +1469,34 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
     if (db) {
       await db.collection("nonogramClass").doc("current").set(payload, { merge: true });
+    }
+  }
+
+  function assignmentId(lessonRunId, groupName, studentName) {
+    return `${lessonRunId || "lesson"}_${groupName || "1"}_${studentName || "guest"}`.replace(/[^\w-]+/g, "_");
+  }
+
+  async function loadRemoteAssignments(lessonRunId, groupName) {
+    if (rtdb) {
+      const snapshot = await rtdb.ref("nonogramAssignments").orderByChild("lessonGroup").equalTo(`${lessonRunId}:${groupName}`).once("value");
+      return snapshotToList(snapshot).map((item) => ({ id: item.id, ...item.data }));
+    }
+    if (db) {
+      const snapshot = await db.collection("nonogramAssignments").where("lessonGroup", "==", `${lessonRunId}:${groupName}`).get();
+      const assignments = [];
+      snapshot.forEach((doc) => assignments.push({ id: doc.id, ...doc.data() }));
+      return assignments;
+    }
+    return [];
+  }
+
+  async function saveRemoteAssignment(id, payload) {
+    if (rtdb) {
+      await rtdb.ref(`nonogramAssignments/${id}`).update(payload);
+      return;
+    }
+    if (db) {
+      await db.collection("nonogramAssignments").doc(id).set(payload, { merge: true });
     }
   }
 
@@ -1531,6 +1581,61 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return pieces[hashText(`${group}:${name}:${studentKey()}`) % pieces.length];
   }
 
+  async function assignedLessonPuzzleAsync() {
+    if (!lessonState.puzzleId) return null;
+    const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
+    const pieces = piecesForParent(lessonState.puzzleId);
+    if (!pieces.length) return parent || null;
+
+    const studentName = els.studentName.value.trim();
+    const groupName = els.groupSelect.value || "1";
+    const lessonRunId = lessonState.runId || lessonState.puzzleId;
+    if (!studentName) return parent || pieces[0];
+    if (!sharedStoreReady()) return assignedLessonPuzzle();
+
+    try {
+      const id = assignmentId(lessonRunId, groupName, studentName);
+      const assignments = await loadRemoteAssignments(lessonRunId, groupName);
+      const existing = assignments.find((item) => item.id === id || item.studentName === studentName);
+      if (existing && pieces.some((piece) => piece.id === existing.puzzleId)) {
+        return puzzles.find((puzzle) => puzzle.id === existing.puzzleId) || assignedLessonPuzzle();
+      }
+
+      const used = new Set(assignments.map((item) => item.puzzleId));
+      const nextPiece = pieces.find((piece) => !used.has(piece.id)) || pieces[assignments.length % pieces.length];
+      await saveRemoteAssignment(id, {
+        lessonId: lessonState.puzzleId,
+        lessonRunId,
+        lessonGroup: `${lessonRunId}:${groupName}`,
+        groupName,
+        studentName,
+        puzzleId: nextPiece.id,
+        puzzleTitle: nextPiece.title,
+        createdAt: serverTimestamp()
+      });
+      return nextPiece;
+    } catch (error) {
+      console.warn(error);
+      return assignedLessonPuzzle();
+    }
+  }
+
+  async function applyLessonAssignment() {
+    if (teacherMode || lessonState.open === false || !lessonState.puzzleId) return;
+    if (!els.studentName.value.trim()) return;
+    const assigned = await assignedLessonPuzzleAsync();
+    if (assigned && assigned.id !== currentPuzzle.id) {
+      assignedByLesson = true;
+      changePuzzle(assigned.id);
+      els.message.className = "message";
+      els.message.textContent = assigned.piece ? `${assigned.title}\uc774 \ubc30\uc815\ub418\uc5c8\uc2b5\ub2c8\ub2e4.` : text.choosePuzzle;
+      assignedByLesson = false;
+    }
+    if (assigned) {
+      await saveProgress(false, { submitted: false });
+    }
+  }
+
   function applyLessonState() {
     const lessonPuzzle = lessonState.puzzleId ? puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId) : null;
     if (lessonState.open === false) {
@@ -1548,23 +1653,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.submitBtn.disabled = !lessonOpen();
     els.hintBtn.disabled = hintUsed || !lessonOpen();
 
-    if (!teacherMode && lessonState.open !== false && lessonState.puzzleId) {
-      const assigned = assignedLessonPuzzle();
-      if (assigned && assigned.id !== currentPuzzle.id) {
-        assignedByLesson = true;
-        changePuzzle(assigned.id);
-        els.message.className = "message";
-        els.message.textContent = assigned.piece ? `${assigned.title}\uc774 \ubc30\uc815\ub418\uc5c8\uc2b5\ub2c8\ub2e4.` : text.choosePuzzle;
-        assignedByLesson = false;
-      }
-    }
+    if (!assignedByLesson) applyLessonAssignment();
     startMyGroupPreviewSync();
   }
 
   async function startLesson() {
     const parentId = currentPuzzle.parentId || currentPuzzle.id;
     const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
-    lessonState = { open: true, puzzleId: parent.id, title: parent.title };
+    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `lesson-${Date.now()}` };
     applyLessonState();
     if (sharedStoreReady()) {
       await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
@@ -1578,7 +1674,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     lessonState = { ...lessonState, open: false };
     applyLessonState();
     if (sharedStoreReady()) {
-      await saveLessonState({ open: false, updatedAt: serverTimestamp() });
+      await saveLessonState({ open: false, runId: lessonState.runId || "", updatedAt: serverTimestamp() });
       setSaveStatus("\uc218\uc5c5 \ub9c8\uac10\ub428", "online");
     } else {
       setSaveStatus("\ub85c\uceec \uc218\uc5c5 \ub9c8\uac10", "error");
@@ -1591,7 +1687,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       lessonState = {
         open: remoteLesson.open !== false,
         puzzleId: remoteLesson.puzzleId || "",
-        title: remoteLesson.title || ""
+        title: remoteLesson.title || "",
+        runId: remoteLesson.runId || ""
       };
       applyLessonState();
     }, (error) => console.warn(error));
@@ -2251,6 +2348,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       const payload = {
       studentName: els.studentName.value.trim() || "guest",
       groupName: els.groupSelect.value || "1",
+      lessonRunId: lessonState.runId || "",
       puzzleId: currentPuzzle.id,
       puzzleTitle: currentPuzzle.title,
       parentId: currentPuzzle.parentId || null,
@@ -2459,21 +2557,24 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return Array.from(ids).filter(Boolean);
   }
 
+  function sessionInCurrentLesson(session) {
+    if (!lessonState.runId) return true;
+    return session.lessonRunId === lessonState.runId;
+  }
+
   async function loadSessions() {
     const targetIds = reviewPuzzleIds();
     const targetSet = new Set(targetIds);
     const sessions = [];
-    const seen = new Set();
 
     localSessionIndex().forEach((key) => {
       const raw = localStorage.getItem(key);
       if (!raw) return;
       try {
         const data = JSON.parse(raw);
-        if (targetSet.has(data.puzzleId) && Array.isArray(data.state)) {
+        if (targetSet.has(data.puzzleId) && Array.isArray(data.state) && sessionInCurrentLesson(data)) {
           const id = `local:${key}`;
           sessions.push({ id, source: "local", ...data });
-          seen.add(id);
         }
       } catch (error) {
         console.warn(error);
@@ -2482,34 +2583,63 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
     if (sharedStoreReady()) {
       try {
-        for (const puzzleId of targetIds) {
-          const remoteSessions = await loadRemoteSessionsForPuzzle(puzzleId);
-          remoteSessions.forEach((session) => {
-            if (!seen.has(session.id) && Array.isArray(session.state)) {
-              sessions.push(session);
-              seen.add(session.id);
-            }
-          });
-        }
+        sessions.push(...await loadRemoteSessionsForPuzzleGroup(targetIds));
       } catch (error) {
         console.warn(error);
       }
     }
 
-    loadedSessions = sessions.sort(sortSessions);
+    loadedSessions = normalizeSessions(sessions.filter(sessionInCurrentLesson)).sort(sortSessions);
     renderSessions();
     return loadedSessions;
+  }
+
+  function sessionUniqueKey(session) {
+    return [
+      session.groupName || "1",
+      session.studentName || "guest",
+      session.puzzleId || "",
+      session.source === "firebase" ? "firebase" : "local"
+    ].join("|");
+  }
+
+  function sessionStudentPuzzleKey(session) {
+    return [
+      session.groupName || "1",
+      session.studentName || "guest",
+      session.puzzleId || ""
+    ].join("|");
+  }
+
+  function sessionTimeValue(session) {
+    const value = session.updatedAt;
+    if (!value) return 0;
+    if (typeof value === "number") return value;
+    if (typeof value.toDate === "function") return value.toDate().getTime();
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  function normalizeSessions(sessions) {
+    const byStudentPuzzle = new Map();
+    sessions.forEach((session) => {
+      if (!Array.isArray(session.state)) return;
+      const key = sessionStudentPuzzleKey(session);
+      const previous = byStudentPuzzle.get(key);
+      if (!previous || session.source === "firebase" || sessionTimeValue(session) >= sessionTimeValue(previous)) {
+        byStudentPuzzle.set(key, session);
+      }
+    });
+    return Array.from(byStudentPuzzle.values());
   }
 
   function mergeLocalAndRemoteSessions(remoteSessions) {
     const targetSet = new Set(reviewPuzzleIds(activeTabName() === "groups" ? selectedGroupParentId() : null));
     const sessions = [];
-    const byDocId = new Set();
 
     (remoteSessions || []).forEach((session) => {
       if (Array.isArray(session.state)) {
         sessions.push(session);
-        byDocId.add(String(session.id || "").replace(/^firebase:/, ""));
       }
     });
 
@@ -2518,7 +2648,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       if (!raw) return;
       try {
         const data = JSON.parse(raw);
-        if (targetSet.has(data.puzzleId) && Array.isArray(data.state) && !byDocId.has(key.replace(/^nonogram:/, ""))) {
+        if (targetSet.has(data.puzzleId) && Array.isArray(data.state) && sessionInCurrentLesson(data)) {
           sessions.push({ id: `local:${key}`, source: "local", ...data });
         }
       } catch (error) {
@@ -2526,7 +2656,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       }
     });
 
-    loadedSessions = sessions.sort(sortSessions);
+    loadedSessions = normalizeSessions(sessions.filter(sessionInCurrentLesson)).sort(sortSessions);
     renderSessions();
   }
 
@@ -2555,7 +2685,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       return;
     }
     unsubscribeGroupPreview = subscribeRemoteSessionsForPuzzleGroup(reviewPuzzleIds(lessonState.puzzleId), (sessions) => {
-      renderMyGroupPreview(sessions);
+      renderMyGroupPreview(sessions.filter(sessionInCurrentLesson));
     }, (error) => console.warn(error));
   }
 
