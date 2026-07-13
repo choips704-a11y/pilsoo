@@ -31,7 +31,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -200,14 +201,26 @@ body.student-mode .shell {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0 10px;
   background: white;
   color: var(--ink);
+}
+
+input,
+select {
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+textarea {
+  min-height: 150px;
+  padding: 10px;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 input[type="range"] {
@@ -570,6 +583,28 @@ code {
   margin-top: 0;
 }
 
+.roster-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.roster-group {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.roster-group strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink);
+}
+
 .session-detail {
   display: grid;
   gap: 10px;
@@ -872,7 +907,15 @@ code {
             <span>&#50896;&#48376; &#54140;&#51600;</span>
             <select id="groupPuzzleSelect"></select>
           </label>
-          <button id="loadGroupsBtn" type="button">&#51312;&#48324; &#49352;&#47196;&#44256;&#52840;</button>
+          <label class="field">
+            <span>&#54617;&#49373; &#47749;&#45800;</span>
+            <textarea id="studentRosterInput" placeholder="&#54620; &#51460;&#50640; &#54620; &#47749;&#50473; &#51077;&#47141;&#54616;&#44144;&#45208;, &#50641;&#49472;&#50640;&#49436; &#51060;&#47492;&#51012; &#48393;&#50668;&#45347;&#51004;&#49464;&#50836;."></textarea>
+          </label>
+          <div class="actions">
+            <button id="autoGroupBtn" type="button">&#47749;&#45800; 6&#51312; &#51088;&#46041; &#45208;&#45572;&#44592;</button>
+            <button id="loadGroupsBtn" type="button">&#51312;&#48324; &#49352;&#47196;&#44256;&#52840;</button>
+          </div>
+          <div id="rosterSummary" class="roster-preview"></div>
           <div id="groupSummary" class="summary">1&#51312;&#48512;&#53552; 6&#51312;&#44620;&#51648; &#54620; &#54868;&#47732;&#50640; &#48372;&#50668;&#51469;&#45768;&#45796;.</div>
         </aside>
         <section class="panel wide">
@@ -1168,7 +1211,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     groupSelect: document.getElementById("groupSelect"),
     myGroupPreview: document.getElementById("myGroupPreview"),
     groupPuzzleSelect: document.getElementById("groupPuzzleSelect"),
+    studentRosterInput: document.getElementById("studentRosterInput"),
+    autoGroupBtn: document.getElementById("autoGroupBtn"),
     loadGroupsBtn: document.getElementById("loadGroupsBtn"),
+    rosterSummary: document.getElementById("rosterSummary"),
     groupSummary: document.getElementById("groupSummary"),
     groupBoards: document.getElementById("groupBoards"),
     startIndividualLessonBtn: document.getElementById("startIndividualLessonBtn"),
@@ -1221,7 +1267,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-13-individual-group-1";
+  const APP_VERSION = "2026-07-13-roster-auto-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1492,6 +1538,21 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return [];
   }
 
+  async function loadRemoteAssignmentsForLesson(lessonRunId) {
+    if (!lessonRunId) return [];
+    if (rtdb) {
+      const snapshot = await rtdb.ref("nonogramAssignments").orderByChild("lessonRunId").equalTo(lessonRunId).once("value");
+      return snapshotToList(snapshot).map((item) => ({ id: item.id, ...item.data }));
+    }
+    if (db) {
+      const snapshot = await db.collection("nonogramAssignments").where("lessonRunId", "==", lessonRunId).get();
+      const assignments = [];
+      snapshot.forEach((doc) => assignments.push({ id: doc.id, ...doc.data() }));
+      return assignments;
+    }
+    return [];
+  }
+
   async function saveRemoteAssignment(id, payload) {
     if (rtdb) {
       await rtdb.ref(`nonogramAssignments/${id}`).update(payload);
@@ -1572,6 +1633,54 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       });
   }
 
+  function normalizeRosterName(name) {
+    return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function parseRosterNames(value) {
+    const seen = new Set();
+    return String(value || "")
+      .split(/[\n,;\t|]+/)
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .filter((name) => {
+        const key = normalizeRosterName(name);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function buildRosterGroups(names) {
+    const groups = Array.from({ length: 6 }, () => []);
+    names.forEach((name, index) => {
+      groups[index % groups.length].push(name);
+    });
+    return groups;
+  }
+
+  function renderRosterSummary(groups, message) {
+    const fragment = document.createDocumentFragment();
+    if (message) {
+      const summary = document.createElement("div");
+      summary.className = "summary";
+      summary.textContent = message;
+      fragment.appendChild(summary);
+    }
+    groups.forEach((names, index) => {
+      const group = document.createElement("div");
+      group.className = "roster-group";
+      const title = document.createElement("strong");
+      title.textContent = `${index + 1}\uc870 ${names.length}\uba85`;
+      const body = document.createElement("span");
+      body.textContent = names.length ? names.join(", ") : "\ubc30\uc815\ub41c \ud559\uc0dd \uc5c6\uc74c";
+      group.appendChild(title);
+      group.appendChild(body);
+      fragment.appendChild(group);
+    });
+    els.rosterSummary.replaceChildren(fragment);
+  }
+
   function assignedLessonPuzzle() {
     if (!lessonState.puzzleId) return null;
     const parent = puzzles.find((puzzle) => puzzle.id === lessonState.puzzleId);
@@ -1590,12 +1699,19 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (!pieces.length) return parent || null;
 
     const studentName = els.studentName.value.trim();
-    const groupName = els.groupSelect.value || "1";
     const lessonRunId = lessonState.runId || lessonState.puzzleId;
     if (!studentName) return parent || pieces[0];
     if (!sharedStoreReady()) return assignedLessonPuzzle();
 
     try {
+      const lessonAssignments = await loadRemoteAssignmentsForLesson(lessonRunId);
+      const rosterMatch = lessonAssignments.find((item) => normalizeRosterName(item.studentName) === normalizeRosterName(studentName));
+      if (rosterMatch && pieces.some((piece) => piece.id === rosterMatch.puzzleId)) {
+        if (rosterMatch.groupName) els.groupSelect.value = String(rosterMatch.groupName);
+        return puzzles.find((puzzle) => puzzle.id === rosterMatch.puzzleId) || assignedLessonPuzzle();
+      }
+
+      const groupName = els.groupSelect.value || "1";
       const id = assignmentId(lessonRunId, groupName, studentName);
       const assignments = await loadRemoteAssignments(lessonRunId, groupName);
       const existing = assignments.find((item) => item.id === id || item.studentName === studentName);
@@ -1686,6 +1802,58 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     } else {
       setSaveStatus("\ub85c\uceec \uc870\ubcc4 \uc218\uc5c5(\uacf5\uc720 \uc548 \ub428)", "error");
     }
+  }
+
+  async function autoGroupRoster() {
+    const names = parseRosterNames(els.studentRosterInput.value);
+    const groups = buildRosterGroups(names);
+    renderRosterSummary(groups, names.length ? `${names.length}\uba85\uc744 6\uac1c \uc870\ub85c \ub098\ub220 \ubc30\uc815\ud558\ub294 \uc911\uc785\ub2c8\ub2e4.` : "\uba85\ub2e8\uc744 \uba3c\uc800 \uc785\ub825\ud558\uc138\uc694.");
+    if (!names.length) return;
+
+    const parentId = selectedGroupParentId();
+    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
+    const pieces = piecesForParent(parent.id);
+    if (!pieces.length) {
+      els.groupSummary.textContent = "\uba3c\uc800 \uc774 \uc6d0\ubcf8 \ud37c\uc990\uc744 \uc870\uac01\uc73c\ub85c \ub098\ub220 \uc800\uc7a5\ud558\uc138\uc694.";
+      return;
+    }
+    if (!sharedStoreReady()) {
+      renderRosterSummary(groups, "Firebase\uac00 \uc5f0\uacb0\ub418\uc5b4\uc57c \ud559\uc0dd \ud734\ub300\ud3f0\uc5d0 \ubc30\uc815\uc774 \ubcf4\uc785\ub2c8\ub2e4.");
+      setSaveStatus("Firebase \uc5f0\uacb0 \ud544\uc694", "error");
+      return;
+    }
+
+    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `group-${Date.now()}`, mode: "group" };
+    els.reviewPuzzleSelect.value = parent.id;
+    els.groupPuzzleSelect.value = parent.id;
+    applyLessonState();
+    await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
+
+    const saves = [];
+    groups.forEach((groupNames, groupIndex) => {
+      const groupName = String(groupIndex + 1);
+      groupNames.forEach((studentName, studentIndex) => {
+        const piece = pieces[studentIndex % pieces.length];
+        const id = assignmentId(lessonState.runId, groupName, studentName);
+        saves.push(saveRemoteAssignment(id, {
+          lessonId: parent.id,
+          lessonRunId: lessonState.runId,
+          lessonGroup: `${lessonState.runId}:${groupName}`,
+          groupName,
+          studentName,
+          puzzleId: piece.id,
+          puzzleTitle: piece.title,
+          rosterAssigned: true,
+          createdAt: serverTimestamp()
+        }));
+      });
+    });
+
+    await Promise.all(saves);
+    localStorage.setItem("nonogramStudentRoster", JSON.stringify(names));
+    renderRosterSummary(groups, `${names.length}\uba85 \ubc30\uc815 \uc644\ub8cc. \ud559\uc0dd\uc740 \uc774\ub984\ub9cc \uc785\ub825\ud558\uba74 \uc790\uae30 \uc870\uac01\uc744 \ubc1b\uc2b5\ub2c8\ub2e4.`);
+    setSaveStatus("\uba85\ub2e8 \uc790\ub3d9 \ubc30\uc815 \uc644\ub8cc", "online");
+    await loadGroupSessions();
   }
 
   async function closeLesson() {
@@ -2900,7 +3068,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function selectedGroupParentId() {
-    return els.groupPuzzleSelect.value || lessonState.puzzleId || currentPuzzle.parentId || currentPuzzle.id;
+    const selectedId = els.groupPuzzleSelect.value || lessonState.puzzleId || currentPuzzle.parentId || currentPuzzle.id;
+    const selected = puzzles.find((puzzle) => puzzle.id === selectedId);
+    return selected && selected.parentId ? selected.parentId : selectedId;
   }
 
   function combineGroupGrid(parent, groupName, sessions) {
@@ -3485,6 +3655,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       loadSessions();
       startSessionLiveSync();
     });
+    els.autoGroupBtn.addEventListener("click", autoGroupRoster);
+    els.studentRosterInput.addEventListener("input", () => {
+      localStorage.setItem("nonogramStudentRosterText", els.studentRosterInput.value);
+      const names = parseRosterNames(els.studentRosterInput.value);
+      if (names.length) renderRosterSummary(buildRosterGroups(names), `${names.length}\uba85 \uc785\ub825\ub428`);
+      else els.rosterSummary.innerHTML = "";
+    });
     els.groupPuzzleSelect.addEventListener("change", loadGroupSessions);
     els.mergePuzzleSelect.addEventListener("change", () => {
       els.reviewPuzzleSelect.value = els.mergePuzzleSelect.value;
@@ -3560,6 +3737,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   async function init() {
     setupFirebase();
     bindEvents();
+    els.studentRosterInput.value = localStorage.getItem("nonogramStudentRosterText") || "";
+    if (els.studentRosterInput.value) {
+      const names = parseRosterNames(els.studentRosterInput.value);
+      renderRosterSummary(buildRosterGroups(names), `${names.length}\uba85 \uc785\ub825\ub428`);
+    }
     await loadPuzzles();
     if (assignedPuzzleId && puzzles.some((puzzle) => puzzle.id === assignedPuzzleId)) {
       currentPuzzle = puzzles.find((puzzle) => puzzle.id === assignedPuzzleId);
