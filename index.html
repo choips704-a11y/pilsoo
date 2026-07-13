@@ -743,7 +743,8 @@ code {
       </div>
       <div class="status-strip">
         <div class="lesson-controls">
-          <button id="startLessonBtn" type="button">&#49688;&#50629; &#49884;&#51089;</button>
+          <button id="startIndividualLessonBtn" type="button">&#44060;&#48324; &#49688;&#50629; &#49884;&#51089;</button>
+          <button id="startGroupLessonBtn" type="button">&#51312;&#48324; &#49688;&#50629; &#49884;&#51089;</button>
           <button id="closeLessonBtn" class="danger" type="button">&#49688;&#50629; &#47560;&#44048;</button>
         </div>
         <button id="shareQrBtn" class="secondary" type="button">QR &#51077;&#51109;</button>
@@ -1170,7 +1171,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     loadGroupsBtn: document.getElementById("loadGroupsBtn"),
     groupSummary: document.getElementById("groupSummary"),
     groupBoards: document.getElementById("groupBoards"),
-    startLessonBtn: document.getElementById("startLessonBtn"),
+    startIndividualLessonBtn: document.getElementById("startIndividualLessonBtn"),
+    startGroupLessonBtn: document.getElementById("startGroupLessonBtn"),
     closeLessonBtn: document.getElementById("closeLessonBtn"),
     lessonStatus: document.getElementById("lessonStatus"),
     connectionStatus: document.getElementById("connectionStatus"),
@@ -1219,7 +1221,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-13-roster-groups-1";
+  const APP_VERSION = "2026-07-13-individual-group-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1242,7 +1244,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let unsubscribeSessions = null;
   let unsubscribeGroupPreview = null;
   let unsubscribeLesson = null;
-  let lessonState = { open: true, puzzleId: "", title: "", runId: "" };
+  let lessonState = { open: true, puzzleId: "", title: "", runId: "", mode: "free" };
   let assignedByLesson = false;
   let nameAssignTimer = null;
   let dragPaint = null;
@@ -1527,7 +1529,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const url = new URL(window.location.href.split("#")[0]);
     url.searchParams.delete("teacher");
     url.searchParams.set("v", APP_VERSION);
-    const sharePuzzleId = lessonState.open !== false && lessonState.puzzleId ? lessonState.puzzleId : currentPuzzle.id;
+    const sharePuzzleId = lessonState.open !== false && lessonState.mode === "group" && lessonState.puzzleId ? lessonState.puzzleId : currentPuzzle.id;
     if (teacherMode && sharePuzzleId) {
       url.searchParams.set("puzzle", sharePuzzleId);
     }
@@ -1644,8 +1646,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         els.message.className = "message error";
         els.message.textContent = "\uc218\uc5c5\uc774 \ub9c8\uac10\ub418\uc5b4 \uc81c\ucd9c\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.";
       }
+    } else if (lessonState.mode === "individual") {
+      setLessonStatus("\uac1c\ubcc4 \uc218\uc5c5 \uc911", "online");
     } else if (lessonPuzzle) {
-      setLessonStatus(`\uc218\uc5c5 \uc911: ${lessonPuzzle.title}`, "online");
+      setLessonStatus(`\uc870\ubcc4 \uc218\uc5c5: ${lessonPuzzle.title}`, "online");
     } else {
       setLessonStatus("\uc218\uc5c5 \ub300\uae30", "neutral");
     }
@@ -1653,20 +1657,34 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.submitBtn.disabled = !lessonOpen();
     els.hintBtn.disabled = hintUsed || !lessonOpen();
 
-    if (!assignedByLesson) applyLessonAssignment();
+    if (lessonState.mode === "group" && !assignedByLesson) applyLessonAssignment();
     startMyGroupPreviewSync();
   }
 
-  async function startLesson() {
-    const parentId = currentPuzzle.parentId || currentPuzzle.id;
-    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
-    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `lesson-${Date.now()}` };
+  async function startIndividualLesson() {
+    lessonState = { open: true, puzzleId: "", title: "\uac1c\ubcc4 \uc218\uc5c5", runId: `individual-${Date.now()}`, mode: "individual" };
+    els.reviewPuzzleSelect.value = "__all__";
     applyLessonState();
     if (sharedStoreReady()) {
       await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
-      setSaveStatus("\uc218\uc5c5 \uc2dc\uc791\ub428", "online");
+      setSaveStatus("\uac1c\ubcc4 \uc218\uc5c5 \uc2dc\uc791\ub428", "online");
     } else {
-      setSaveStatus("\ub85c\uceec \uc218\uc5c5 \uc2dc\uc791(\uacf5\uc720 \uc548 \ub428)", "error");
+      setSaveStatus("\ub85c\uceec \uac1c\ubcc4 \uc218\uc5c5(\uacf5\uc720 \uc548 \ub428)", "error");
+    }
+  }
+
+  async function startGroupLesson() {
+    const parentId = currentPuzzle.parentId || currentPuzzle.id;
+    const parent = puzzles.find((puzzle) => puzzle.id === parentId) || currentPuzzle;
+    lessonState = { open: true, puzzleId: parent.id, title: parent.title, runId: `group-${Date.now()}`, mode: "group" };
+    els.reviewPuzzleSelect.value = parent.id;
+    els.groupPuzzleSelect.value = parent.id;
+    applyLessonState();
+    if (sharedStoreReady()) {
+      await saveLessonState({ ...lessonState, updatedAt: serverTimestamp() });
+      setSaveStatus("\uc870\ubcc4 \uc218\uc5c5 \uc2dc\uc791\ub428", "online");
+    } else {
+      setSaveStatus("\ub85c\uceec \uc870\ubcc4 \uc218\uc5c5(\uacf5\uc720 \uc548 \ub428)", "error");
     }
   }
 
@@ -1674,7 +1692,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     lessonState = { ...lessonState, open: false };
     applyLessonState();
     if (sharedStoreReady()) {
-      await saveLessonState({ open: false, runId: lessonState.runId || "", updatedAt: serverTimestamp() });
+      await saveLessonState({ open: false, runId: lessonState.runId || "", mode: lessonState.mode || "free", updatedAt: serverTimestamp() });
       setSaveStatus("\uc218\uc5c5 \ub9c8\uac10\ub428", "online");
     } else {
       setSaveStatus("\ub85c\uceec \uc218\uc5c5 \ub9c8\uac10", "error");
@@ -1688,7 +1706,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         open: remoteLesson.open !== false,
         puzzleId: remoteLesson.puzzleId || "",
         title: remoteLesson.title || "",
-        runId: remoteLesson.runId || ""
+        runId: remoteLesson.runId || "",
+        mode: remoteLesson.mode || "free"
       };
       applyLessonState();
     }, (error) => console.warn(error));
@@ -1877,20 +1896,28 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     [els.puzzleSelect, els.reviewPuzzleSelect, els.groupPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
       const selected = select.value;
       select.innerHTML = "";
+      if (select === els.reviewPuzzleSelect) {
+        const allOption = document.createElement("option");
+        allOption.value = "__all__";
+        allOption.textContent = "\uc804\uccb4 \ud65c\ub3d9";
+        select.appendChild(allOption);
+      }
       puzzles.forEach((puzzle) => {
         const option = document.createElement("option");
         option.value = puzzle.id;
         option.textContent = `${puzzle.title} (${puzzle.grid[0].length}x${puzzle.grid.length})`;
         select.appendChild(option);
       });
-      if (puzzles.some((puzzle) => puzzle.id === selected)) {
+      if (selected === "__all__" && select === els.reviewPuzzleSelect) {
+        select.value = selected;
+      } else if (puzzles.some((puzzle) => puzzle.id === selected)) {
         select.value = selected;
       }
     });
 
     hydrateParentSelect();
     els.puzzleSelect.value = currentPuzzle.id;
-    els.reviewPuzzleSelect.value = currentPuzzle.id;
+    if (els.reviewPuzzleSelect.value !== "__all__") els.reviewPuzzleSelect.value = currentPuzzle.id;
     els.groupPuzzleSelect.value = currentPuzzle.parentId || currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
     els.splitPuzzleSelect.value = currentPuzzle.id;
@@ -2349,6 +2376,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       studentName: els.studentName.value.trim() || "guest",
       groupName: els.groupSelect.value || "1",
       lessonRunId: lessonState.runId || "",
+      lessonMode: lessonState.mode || "free",
       puzzleId: currentPuzzle.id,
       puzzleTitle: currentPuzzle.title,
       parentId: currentPuzzle.parentId || null,
@@ -2550,6 +2578,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function reviewPuzzleIds(basePuzzleId) {
     const selectedPuzzleId = basePuzzleId || els.reviewPuzzleSelect.value || els.mergePuzzleSelect.value;
+    if (selectedPuzzleId === "__all__") {
+      return puzzles.map((puzzle) => puzzle.id);
+    }
     const ids = new Set([selectedPuzzleId]);
     puzzles.forEach((puzzle) => {
       if (puzzle.parentId === selectedPuzzleId) ids.add(puzzle.id);
@@ -2680,7 +2711,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       unsubscribeGroupPreview();
       unsubscribeGroupPreview = null;
     }
-    if (teacherMode || !sharedStoreReady() || !lessonState.puzzleId) {
+    if (teacherMode || lessonState.mode !== "group" || !sharedStoreReady() || !lessonState.puzzleId) {
       renderMyGroupPreview([]);
       return;
     }
@@ -2928,7 +2959,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function renderMyGroupPreview(sessions) {
-    if (teacherMode || !lessonState.puzzleId) {
+    if (teacherMode || lessonState.mode !== "group" || !lessonState.puzzleId) {
       els.myGroupPreview.innerHTML = "";
       return;
     }
@@ -3431,7 +3462,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.markTool.addEventListener("click", () => setTool("mark"));
     els.shareQrBtn.addEventListener("click", openQrDialog);
     els.teacherModeBtn.addEventListener("click", toggleTeacherMode);
-    els.startLessonBtn.addEventListener("click", startLesson);
+    els.startIndividualLessonBtn.addEventListener("click", startIndividualLesson);
+    els.startGroupLessonBtn.addEventListener("click", startGroupLesson);
     els.closeLessonBtn.addEventListener("click", closeLesson);
     els.closeQrBtn.addEventListener("click", closeQrDialog);
     els.copyQrUrlBtn.addEventListener("click", copyQrUrl);
@@ -3446,8 +3478,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.deleteAllGeneratedBtn.addEventListener("click", deleteAllGenerated);
     els.puzzleSelect.addEventListener("change", (event) => changePuzzle(event.target.value));
     els.reviewPuzzleSelect.addEventListener("change", () => {
-      els.mergePuzzleSelect.value = els.reviewPuzzleSelect.value;
-      els.groupPuzzleSelect.value = els.reviewPuzzleSelect.value;
+      if (els.reviewPuzzleSelect.value !== "__all__") {
+        els.mergePuzzleSelect.value = els.reviewPuzzleSelect.value;
+        els.groupPuzzleSelect.value = els.reviewPuzzleSelect.value;
+      }
       loadSessions();
       startSessionLiveSync();
     });
