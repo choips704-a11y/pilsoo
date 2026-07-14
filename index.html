@@ -915,8 +915,7 @@ code {
             </select>
           </label>
           <div class="actions">
-            <button id="splitPuzzleBtn" type="button">&#51312;&#44033; &#48120;&#47532;&#48372;&#44592;</button>
-            <button id="savePiecesBtn" class="secondary" type="button">&#51312;&#44033; &#54140;&#51600; &#52628;&#44032;</button>
+            <button id="splitPuzzleBtn" type="button">&#51312;&#44033; &#47564;&#46308;&#44256; &#54617;&#49373;&#50640;&#44172; &#48372;&#45236;&#44592;</button>
             <button id="deletePiecesBtn" class="danger" type="button">&#51060; &#50896;&#48376;&#51032; &#51312;&#44033; &#49325;&#51228;</button>
             <button id="deleteAllPiecesBtn" class="danger" type="button">&#47784;&#46304; &#51312;&#44033; &#49325;&#51228;</button>
           </div>
@@ -1161,7 +1160,6 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     splitPuzzleSelect: document.getElementById("splitPuzzleSelect"),
     pieceSize: document.getElementById("pieceSize"),
     splitPuzzleBtn: document.getElementById("splitPuzzleBtn"),
-    savePiecesBtn: document.getElementById("savePiecesBtn"),
     deletePiecesBtn: document.getElementById("deletePiecesBtn"),
     deleteAllPiecesBtn: document.getElementById("deleteAllPiecesBtn"),
     pieceSummary: document.getElementById("pieceSummary"),
@@ -1224,7 +1222,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-precise-image-conversion-2";
+  const APP_VERSION = "2026-07-14-piece-publish-fix-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1326,6 +1324,27 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (db) {
       await db.collection("nonogramPuzzles").doc(id).set(payload, { merge: true });
     }
+  }
+
+  async function saveRemotePuzzleBatch(items) {
+    if (rtdb) {
+      const updates = {};
+      items.forEach((item) => {
+        updates[`nonogramPuzzles/${item.id}`] = item.payload;
+      });
+      await rtdb.ref().update(updates);
+      return;
+    }
+    if (db) {
+      const batch = db.batch();
+      items.forEach((item) => {
+        const ref = db.collection("nonogramPuzzles").doc(item.id);
+        batch.set(ref, item.payload, { merge: true });
+      });
+      await batch.commit();
+      return;
+    }
+    throw new Error("Firebase sharing is not connected.");
   }
 
   async function deleteRemotePuzzle(id) {
@@ -2760,33 +2779,55 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   async function saveSplitPieces() {
     if (!splitPieces.length) splitSelectedPuzzle();
-    for (const piece of splitPieces) {
-      saveLocalCustomPuzzle(piece);
-      if (sharedStoreReady()) {
-        try {
-          await saveRemotePuzzle(piece.id, {
-            title: piece.title,
-            grid: piece.grid,
-            width: piece.grid[0].length,
-            height: piece.grid.length,
-            parentId: piece.parentId,
-            parentTitle: piece.parentTitle,
-            piece: piece.piece,
-            createdAt: serverTimestamp()
-          });
-        } catch (error) {
-          console.warn(error);
-        }
-      }
-    }
-    await loadPuzzles();
     if (!sharedStoreReady()) {
+      splitPieces.forEach(saveLocalCustomPuzzle);
+      await loadPuzzles();
       els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01\uc744 \ub0b4 \ucef4\ud4e8\ud130\uc5d0\ub9cc \uc800\uc7a5\ud588\uc2b5\ub2c8\ub2e4. \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc774\ub824\uba74 Firebase \uc124\uc815\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.`;
       setSaveStatus("\ub85c\uceec \uc800\uc7a5\ub428(\uacf5\uc720 \uc548 \ub428)", "error");
       return;
     }
-    els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \ubaa9\ub85d\uc5d0 \ucd94\uac00\ud588\uc2b5\ub2c8\ub2e4.`;
-    setSaveStatus(text.savedPuzzle, "online");
+
+    const items = splitPieces.map((piece) => ({
+      id: piece.id,
+      payload: {
+        title: piece.title,
+        grid: piece.grid,
+        width: piece.grid[0].length,
+        height: piece.grid.length,
+        parentId: piece.parentId,
+        parentTitle: piece.parentTitle,
+        piece: piece.piece,
+        createdAt: serverTimestamp()
+      }
+    }));
+
+    els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01\uc744 \ud559\uc0dd \ud654\uba74\uc5d0 \ubcf4\ub0b4\ub294 \uc911\uc785\ub2c8\ub2e4.`;
+    setSaveStatus("\uc870\uac01 \uc800\uc7a5 \uc911", "neutral");
+
+    try {
+      await saveRemotePuzzleBatch(items);
+      const remotePuzzles = await loadRemotePuzzles();
+      const remoteIds = new Set(remotePuzzles.map((puzzle) => puzzle.id));
+      const missing = splitPieces.filter((piece) => !remoteIds.has(piece.id));
+      if (missing.length) {
+        throw new Error(`${missing.length} piece puzzles were not found after saving.`);
+      }
+
+      splitPieces.forEach(saveLocalCustomPuzzle);
+      applyPuzzleList(remotePuzzles);
+      els.pieceSummary.textContent = `${splitPieces.length}\uac1c \uc870\uac01\uc744 Firebase\uc5d0 \ud655\uc778\ud588\uc2b5\ub2c8\ub2e4. \ud559\uc0dd \ud654\uba74\uc5d0 \uc989\uc2dc \ud45c\uc2dc\ub429\ub2c8\ub2e4.`;
+      setSaveStatus(text.savedPuzzle, "online");
+    } catch (error) {
+      console.error(error);
+      els.pieceSummary.textContent = "\uc870\uac01\uc744 Firebase\uc5d0 \uc800\uc7a5\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. \ud559\uc0dd \ud654\uba74\uc5d0\ub294 \ubcf4\uc774\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4. \uc5f0\uacb0 \uc0c1\ud0dc\ub97c \ud655\uc778\ud558\uace0 \ub2e4\uc2dc \uc2dc\ub3c4\ud558\uc138\uc694.";
+      setSaveStatus("\uc870\uac01 \uacf5\uc720 \uc2e4\ud328", "error");
+    }
+  }
+
+  async function splitAndPublishPieces() {
+    splitSelectedPuzzle();
+    if (!splitPieces.length) return;
+    await saveSplitPieces();
   }
 
   async function loadSessionsForPuzzleId(puzzleId) {
@@ -3291,8 +3332,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       mergeSessions();
     });
     els.saveMergedBtn.addEventListener("click", () => savePuzzleFromGrid(mergedGrid, els.mergedPuzzleTitle.value.trim() || "\ud569\uccd0\uc9c4 \ud37c\uc990"));
-    els.splitPuzzleBtn.addEventListener("click", splitSelectedPuzzle);
-    els.savePiecesBtn.addEventListener("click", saveSplitPieces);
+    els.splitPuzzleBtn.addEventListener("click", splitAndPublishPieces);
     els.deletePiecesBtn.addEventListener("click", deletePiecesForSelectedParent);
     els.deleteAllPiecesBtn.addEventListener("click", deleteAllPieces);
     els.combinePiecesBtn.addEventListener("click", combinePieceSessions);
