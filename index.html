@@ -194,6 +194,10 @@ body.student-mode .shell {
   min-width: 0;
 }
 
+.board-wrap {
+  overflow: auto;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -369,12 +373,22 @@ button.danger:hover {
   background: white;
   padding: 12px;
   --cell-size: 44px;
+  --column-clue-height: 58px;
+}
+
+.cell,
+.clue.row-clue {
+  height: var(--cell-size);
+}
+
+.corner,
+.clue.column-clue {
+  height: var(--column-clue-height);
 }
 
 .corner,
 .clue,
 .cell {
-  height: var(--cell-size);
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -403,6 +417,20 @@ button.danger:hover {
   font-weight: 700;
   text-align: center;
   white-space: pre-line;
+  line-height: 1.05;
+  overflow: visible;
+}
+
+.clue.column-clue {
+  align-items: flex-end;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.clue.row-clue {
+  justify-content: flex-end;
+  padding-right: 6px;
+  white-space: nowrap;
 }
 
 .clue.done {
@@ -1238,7 +1266,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-three-hints-1";
+  const APP_VERSION = "2026-07-15-full-clues-1";
   const MAX_HINTS = 3;
   let db = null;
   let rtdb = null;
@@ -1820,10 +1848,20 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const rowCount = currentPuzzle.grid.length;
     const colCount = currentPuzzle.grid[0].length;
     const size = cellSizeFor(currentPuzzle.grid);
-    const clueSize = Math.max(58, size * 2);
-    const columns = [`${clueSize}px`].concat(Array(colCount).fill(`${size}px`)).join(" ");
+    const rowClueLines = currentPuzzle.grid.map((row) => cluesFor(row));
+    const columnClueLines = Array.from({ length: colCount }, (_, col) => (
+      cluesFor(currentPuzzle.grid.map((row) => row[col]))
+    ));
+    const clueFontSize = Math.max(7, Math.min(12, size * 0.28));
+    const longestRowClue = Math.max(...rowClueLines.map((clues) => clues.join(" ").length));
+    const maxColumnClues = Math.max(...columnClueLines.map((clues) => clues.length));
+    const rowClueWidth = Math.max(58, size * 2, Math.ceil(longestRowClue * clueFontSize * 0.68 + 16));
+    const columnClueHeight = Math.max(size, Math.ceil(maxColumnClues * (clueFontSize * 1.05 + 2) + 10));
+    const columns = [`${rowClueWidth}px`].concat(Array(colCount).fill(`${size}px`)).join(" ");
     els.board.style.gridTemplateColumns = columns;
+    els.board.style.gridTemplateRows = `${columnClueHeight}px repeat(${rowCount}, ${size}px)`;
     els.board.style.setProperty("--cell-size", `${size}px`);
+    els.board.style.setProperty("--column-clue-height", `${columnClueHeight}px`);
     els.board.innerHTML = "";
 
     const corner = document.createElement("div");
@@ -1834,14 +1872,14 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       const line = currentPuzzle.grid.map((row) => row[col]);
       const playedLine = state.map((row) => row[col]);
       const clue = document.createElement("div");
-      clue.className = lineIsComplete(line, playedLine) ? "clue done" : "clue";
+      clue.className = lineIsComplete(line, playedLine) ? "clue column-clue done" : "clue column-clue";
       clue.textContent = cluesFor(line).join("\n");
       els.board.appendChild(clue);
     }
 
     for (let row = 0; row < rowCount; row += 1) {
       const clue = document.createElement("div");
-      clue.className = lineIsComplete(currentPuzzle.grid[row], state[row]) ? "clue done" : "clue";
+      clue.className = lineIsComplete(currentPuzzle.grid[row], state[row]) ? "clue row-clue done" : "clue row-clue";
       clue.textContent = cluesFor(currentPuzzle.grid[row]).join(" ");
       els.board.appendChild(clue);
 
