@@ -826,7 +826,7 @@ code {
 
           <div class="actions">
             <button id="submitBtn" type="button">&#51228;&#52636;</button>
-            <button id="hintBtn" class="secondary" type="button">&#55180;&#53944; 1&#54924;</button>
+            <button id="hintBtn" class="secondary" type="button">&#55180;&#53944; 3&#54924; &#45224;&#51020;</button>
             <button id="checkBtn" class="teacher-only" type="button">&#51221;&#45813; &#54869;&#51064;</button>
             <button id="resetBtn" class="secondary" type="button">&#45796;&#49884; &#49884;&#51089;</button>
             <button id="deletePuzzleBtn" class="danger teacher-only" type="button">&#49440;&#53469; &#54140;&#51600; &#51648;&#50864;&#44592;</button>
@@ -1238,7 +1238,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-easy-balloon-1";
+  const APP_VERSION = "2026-07-14-three-hints-1";
+  const MAX_HINTS = 3;
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1248,7 +1249,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let startedAt = Date.now();
   let seconds = 0;
   let timerStopped = false;
-  let hintUsed = false;
+  let hintUsed = 0;
   let saveTimer = null;
   let loadedSessions = [];
   let mergedGrid = null;
@@ -1544,7 +1545,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
   function applyLessonState() {
     els.submitBtn.disabled = false;
-    els.hintBtn.disabled = hintUsed;
+    updateHintButton();
+  }
+
+  function updateHintButton() {
+    const remaining = Math.max(0, MAX_HINTS - hintUsed);
+    els.hintBtn.textContent = `\ud78c\ud2b8 ${remaining}\ud68c \ub0a8\uc74c`;
+    els.hintBtn.disabled = remaining === 0 || !lessonOpen();
   }
 
   function openQrDialog() {
@@ -2000,9 +2007,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function useHint() {
-    if (hintUsed) {
+    if (hintUsed >= MAX_HINTS) {
       els.message.className = "message error";
-      els.message.textContent = "\ud78c\ud2b8\ub294 \ud55c \ubc88\ub9cc \uc0ac\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
+      els.message.textContent = `\ud78c\ud2b8 ${MAX_HINTS}\ud68c\ub97c \ubaa8\ub450 \uc0ac\uc6a9\ud588\uc2b5\ub2c8\ub2e4.`;
       return;
     }
     if (!lessonOpen()) {
@@ -2028,10 +2035,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
 
     const hint = candidates[0];
     state[hint.row][hint.col] = hint.value === 1 ? 1 : 2;
-    hintUsed = true;
-    els.hintBtn.disabled = true;
+    hintUsed += 1;
+    updateHintButton();
     els.message.className = "message";
-    els.message.textContent = `${hint.row + 1}\ud589 ${hint.col + 1}\uc5f4 \ud55c \uce78\uc744 \ud78c\ud2b8\ub85c \ud45c\uc2dc\ud588\uc2b5\ub2c8\ub2e4.`;
+    els.message.textContent = `${hint.row + 1}\ud589 ${hint.col + 1}\uc5f4 \ud55c \uce78\uc744 \ud78c\ud2b8\ub85c \ud45c\uc2dc\ud588\uc2b5\ub2c8\ub2e4. ${MAX_HINTS - hintUsed}\ud68c \ub0a8\uc558\uc2b5\ub2c8\ub2e4.`;
     renderBoard();
     queueSave();
   }
@@ -2151,9 +2158,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
-    hintUsed = false;
+    hintUsed = 0;
     beginNewSessionAttempt();
-    els.hintBtn.disabled = !lessonOpen();
+    updateHintButton();
     els.message.className = "message";
     els.message.textContent = "\uad50\uc0ac\uac00 \uc774\uc804 \uacb0\uacfc\ub97c \uc0ad\uc81c\ud588\uc2b5\ub2c8\ub2e4. \ube48 \ud37c\uc990\ub85c \uc0c8\ub85c \uc2dc\uc791\ud569\ub2c8\ub2e4.";
     setSaveStatus("\uc774\uc804 \uacb0\uacfc \uc644\uc804 \uc0ad\uc81c\ub428", "online");
@@ -2320,8 +2327,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         state = parsed.state;
         seconds = Number(parsed.seconds) || 0;
         timerStopped = Boolean(parsed.submitted);
-        hintUsed = Boolean(parsed.hintUsed);
-        els.hintBtn.disabled = hintUsed || !lessonOpen();
+        hintUsed = Math.min(MAX_HINTS, Math.max(0, Number(parsed.hintUsed) || 0));
+        updateHintButton();
         startedAt = Date.now();
         return true;
       }
@@ -2337,9 +2344,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
-    hintUsed = false;
+    hintUsed = 0;
     beginNewSessionAttempt();
-    els.hintBtn.disabled = !lessonOpen();
+    updateHintButton();
     localStorage.removeItem(storageKey());
     els.message.className = "message";
     els.message.textContent = text.restart;
@@ -2353,7 +2360,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
-    hintUsed = false;
+    hintUsed = 0;
     beginNewSessionAttempt();
     loadProgress();
     try {
@@ -2691,7 +2698,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       meta.className = "session-meta";
       appendBadge(meta, session.submitted ? "\uc81c\ucd9c" : "\uc9c4\ud589 \uc911", session.submitted ? "good" : "");
       appendBadge(meta, session.solved ? "\uc815\ub2f5" : "\ubbf8\uc644\ub8cc", session.solved ? "good" : "warn");
-      if (session.hintUsed) appendBadge(meta, "\ud78c\ud2b8 \uc0ac\uc6a9", "warn");
+      if (session.hintUsed) {
+        const sessionHints = Math.max(1, Number(session.hintUsed) || 1);
+        appendBadge(meta, `\ud78c\ud2b8 ${sessionHints}\ud68c \uc0ac\uc6a9`, "warn");
+      }
       appendBadge(meta, `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`);
       button.appendChild(name);
       button.appendChild(meta);
@@ -3521,9 +3531,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       seconds = 0;
       startedAt = Date.now();
       timerStopped = false;
-      hintUsed = false;
+      hintUsed = 0;
       beginNewSessionAttempt();
       loadProgress();
+      updateHintButton();
       try {
         await resetDeletedSessionAttempt();
       } catch (error) {
