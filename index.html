@@ -1222,7 +1222,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-piece-publish-fix-1";
+  const APP_VERSION = "2026-07-14-permanent-session-delete-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -1244,6 +1244,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let unsubscribePuzzles = null;
   let unsubscribeSessions = null;
   let dragPaint = null;
+  let sessionAttemptId = "";
   const params = new URLSearchParams(window.location.search);
   const assignedPuzzleId = params.get("puzzle") || "";
   let teacherMode = params.get("teacher") === "1" || localStorage.getItem("nonogramTeacherMode") === "1";
@@ -1459,13 +1460,37 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
   }
 
-  async function deleteRemoteSession(id) {
+  async function loadRemoteSessionDeletion(id) {
     if (rtdb) {
-      await rtdb.ref(`nonogramSessions/${id}`).remove();
+      const snapshot = await rtdb.ref(`nonogramDeletedSessions/${id}`).once("value");
+      return snapshot.val() || null;
+    }
+    if (db) {
+      const doc = await db.collection("nonogramDeletedSessions").doc(id).get();
+      return doc.exists ? doc.data() : null;
+    }
+    return null;
+  }
+
+  async function deleteRemoteSession(id, session) {
+    const deletion = {
+      deletedAt: serverTimestamp(),
+      deletedAttemptId: session && session.attemptId ? session.attemptId : "legacy",
+      studentName: session && session.studentName ? session.studentName : "guest",
+      puzzleId: session && session.puzzleId ? session.puzzleId : ""
+    };
+    if (rtdb) {
+      await rtdb.ref().update({
+        [`nonogramSessions/${id}`]: null,
+        [`nonogramDeletedSessions/${id}`]: deletion
+      });
       return;
     }
     if (db) {
-      await db.collection("nonogramSessions").doc(id).delete();
+      const batch = db.batch();
+      batch.delete(db.collection("nonogramSessions").doc(id));
+      batch.set(db.collection("nonogramDeletedSessions").doc(id), deletion, { merge: true });
+      await batch.commit();
     }
   }
 
@@ -1473,11 +1498,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const sessions = await loadRemoteSessionsForPuzzle(puzzleId);
     for (const session of sessions) {
       const id = session.id.replace(/^firebase:/, "");
-      if (rtdb) {
-        await rtdb.ref(`nonogramSessions/${id}`).remove();
-      } else if (db) {
-        await db.collection("nonogramSessions").doc(id).delete();
-      }
+      await deleteRemoteSession(id, session);
     }
   }
 
@@ -2050,6 +2071,15 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return `student_${name}_${safeSessionIdPart(currentPuzzle.id)}`;
   }
 
+  function beginNewSessionAttempt() {
+    sessionAttemptId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return sessionAttemptId;
+  }
+
+  function currentSessionAttemptId() {
+    return sessionAttemptId || beginNewSessionAttempt();
+  }
+
   function localSessionIndex() {
     try {
       return JSON.parse(localStorage.getItem("nonogramSessionIndex") || "[]");
@@ -2091,6 +2121,30 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     localStorage.setItem("nonogramSessionIndex", JSON.stringify(localSessionIndex().filter((item) => item !== key)));
   }
 
+  async function resetDeletedSessionAttempt() {
+    if (!sharedStoreReady()) return false;
+    const deletion = await loadRemoteSessionDeletion(sessionDocId());
+    if (!deletion) return false;
+    const deletedAttemptId = deletion.deletedAttemptId || "legacy";
+    const activeAttemptId = sessionAttemptId || "legacy";
+    if (deletedAttemptId !== activeAttemptId) return false;
+
+    window.clearTimeout(saveTimer);
+    removeLocalSessionKey(storageKey());
+    state = makeBlankState(currentPuzzle.grid);
+    seconds = 0;
+    startedAt = Date.now();
+    timerStopped = false;
+    hintUsed = false;
+    beginNewSessionAttempt();
+    els.hintBtn.disabled = !lessonOpen();
+    els.message.className = "message";
+    els.message.textContent = "\uad50\uc0ac\uac00 \uc774\uc804 \uacb0\uacfc\ub97c \uc0ad\uc81c\ud588\uc2b5\ub2c8\ub2e4. \ube48 \ud37c\uc990\ub85c \uc0c8\ub85c \uc2dc\uc791\ud569\ub2c8\ub2e4.";
+    setSaveStatus("\uc774\uc804 \uacb0\uacfc \uc644\uc804 \uc0ad\uc81c\ub428", "online");
+    renderBoard();
+    return true;
+  }
+
   function removeMatchingLocalSession(session) {
     const nextIndex = [];
     localSessionIndex().forEach((key) => {
@@ -2122,7 +2176,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
 
     if (String(session.id || "").startsWith("firebase:") && sharedStoreReady()) {
-      await deleteRemoteSession(session.id.replace(/^firebase:/, ""));
+      await deleteRemoteSession(session.id.replace(/^firebase:/, ""), session);
     }
   }
 
@@ -2192,11 +2246,23 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     } catch (error) {
       wasSubmitted = false;
     }
+
+    if (sharedStoreReady()) {
+      try {
+        if (await resetDeletedSessionAttempt()) return;
+      } catch (error) {
+        console.warn(error);
+        setSaveStatus("\uc0ad\uc81c \uc0c1\ud0dc \ud655\uc778 \uc2e4\ud328", "error");
+        return;
+      }
+    }
+
     const submitted = Object.prototype.hasOwnProperty.call(meta, "submitted") ? Boolean(meta.submitted) : wasSubmitted;
     const payload = {
       studentName: els.studentName.value.trim() || "guest",
       puzzleId: currentPuzzle.id,
       puzzleTitle: currentPuzzle.title,
+      attemptId: currentSessionAttemptId(),
       state: state,
       seconds: timerStopped ? seconds : seconds + Math.floor((Date.now() - startedAt) / 1000),
       hintUsed: hintUsed,
@@ -2234,6 +2300,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed.state)) {
+        sessionAttemptId = parsed.attemptId || "legacy";
         state = parsed.state;
         seconds = Number(parsed.seconds) || 0;
         timerStopped = Boolean(parsed.submitted);
@@ -2255,6 +2322,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     startedAt = Date.now();
     timerStopped = false;
     hintUsed = false;
+    beginNewSessionAttempt();
     els.hintBtn.disabled = !lessonOpen();
     localStorage.removeItem(storageKey());
     els.message.className = "message";
@@ -2263,14 +2331,20 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     queueSave();
   }
 
-  function changePuzzle(puzzleId) {
+  async function changePuzzle(puzzleId) {
     currentPuzzle = puzzles.find((puzzle) => puzzle.id === puzzleId) || puzzles[0];
     state = makeBlankState(currentPuzzle.grid);
     seconds = 0;
     startedAt = Date.now();
     timerStopped = false;
     hintUsed = false;
+    beginNewSessionAttempt();
     loadProgress();
+    try {
+      await resetDeletedSessionAttempt();
+    } catch (error) {
+      console.warn(error);
+    }
     els.puzzleSelect.value = currentPuzzle.id;
     els.reviewPuzzleSelect.value = currentPuzzle.id;
     els.mergePuzzleSelect.value = currentPuzzle.id;
@@ -3315,13 +3389,19 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       combinedPieceGrid = null;
       els.combinedPiecePreview.innerHTML = "";
     });
-    els.studentName.addEventListener("change", () => {
+    els.studentName.addEventListener("change", async () => {
       state = makeBlankState(currentPuzzle.grid);
       seconds = 0;
       startedAt = Date.now();
       timerStopped = false;
       hintUsed = false;
+      beginNewSessionAttempt();
       loadProgress();
+      try {
+        await resetDeletedSessionAttempt();
+      } catch (error) {
+        console.warn(error);
+      }
       renderBoard();
     });
     els.loadSessionsBtn.addEventListener("click", loadSessions);
@@ -3346,8 +3426,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.saveConvertedBtn.addEventListener("click", () => savePuzzleFromGrid(convertedGrid, els.convertedPuzzleTitle.value.trim() || "\uc774\ubbf8\uc9c0 \ud37c\uc990"));
 
     window.addEventListener("beforeunload", () => {
-      if (!timerStopped) seconds += Math.floor((Date.now() - startedAt) / 1000);
-      saveProgress(false);
+      if (!timerStopped) {
+        seconds += Math.floor((Date.now() - startedAt) / 1000);
+        saveProgress(false);
+      }
     });
     window.addEventListener("pointerup", finishCellDrag);
     window.addEventListener("pointercancel", finishCellDrag);
@@ -3365,9 +3447,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
     state = makeBlankState(currentPuzzle.grid);
     timerStopped = false;
+    beginNewSessionAttempt();
     loadProgress();
     applyMode();
     renderBoard();
+    resetDeletedSessionAttempt().catch((error) => console.warn(error));
     startPuzzleLiveSync();
     startSessionLiveSync();
     window.setInterval(tick, 1000);
