@@ -1222,7 +1222,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-permanent-session-delete-1";
+  const APP_VERSION = "2026-07-14-clean-precise-conversion-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -3107,6 +3107,87 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     return { canvas, ctx, sampleWidth, sampleHeight };
   }
 
+  function refinePreciseCoverage(coverage) {
+    const height = coverage.length;
+    const width = coverage[0]?.length || 0;
+    const scoreAt = (row, col) => {
+      let score = coverage[row][col] * 0.48;
+      const neighbors = [
+        [-1, 0, 0.09], [1, 0, 0.09], [0, -1, 0.09], [0, 1, 0.09],
+        [-1, -1, 0.04], [-1, 1, 0.04], [1, -1, 0.04], [1, 1, 0.04]
+      ];
+      neighbors.forEach(([rowOffset, colOffset, weight]) => {
+        const nextRow = row + rowOffset;
+        const nextCol = col + colOffset;
+        if (nextRow >= 0 && nextRow < height && nextCol >= 0 && nextCol < width) {
+          score += coverage[nextRow][nextCol] * weight;
+        }
+      });
+      return score;
+    };
+
+    let grid = coverage.map((line, row) => line.map((cellCoverage, col) => {
+      const score = scoreAt(row, col);
+      return score >= 0.5 && (cellCoverage >= 0.18 || score >= 0.72) ? 1 : 0;
+    }));
+
+    const countNeighbors = (source, row, col) => {
+      let count = 0;
+      for (let y = Math.max(0, row - 1); y <= Math.min(height - 1, row + 1); y += 1) {
+        for (let x = Math.max(0, col - 1); x <= Math.min(width - 1, col + 1); x += 1) {
+          if (y === row && x === col) continue;
+          count += source[y][x];
+        }
+      }
+      return count;
+    };
+
+    // Remove unsupported salt-and-pepper pixels while preserving connected
+    // one-cell-wide lines. Low-confidence spikes at line ends are also removed.
+    const cleaned = grid.map((line, row) => line.map((value, col) => {
+      const neighbors = countNeighbors(grid, row, col);
+      if (value === 1 && neighbors === 0) return 0;
+      if (value === 1 && neighbors === 1 && coverage[row][col] < 0.55) return 0;
+      if (value === 0 && neighbors >= 7 && coverage[row][col] >= 0.08) return 1;
+      return value;
+    }));
+
+    // A second pass removes two-cell flecks on larger grids only when both
+    // cells have weak source coverage; real dark details remain intact.
+    grid = cleaned.map((line) => line.slice());
+    if (Math.max(width, height) >= 25) {
+      const visited = Array.from({ length: height }, () => Array(width).fill(false));
+      for (let row = 0; row < height; row += 1) {
+        for (let col = 0; col < width; col += 1) {
+          if (!grid[row][col] || visited[row][col]) continue;
+          const stack = [[row, col]];
+          const component = [];
+          visited[row][col] = true;
+          while (stack.length) {
+            const [currentRow, currentCol] = stack.pop();
+            component.push([currentRow, currentCol]);
+            for (let y = Math.max(0, currentRow - 1); y <= Math.min(height - 1, currentRow + 1); y += 1) {
+              for (let x = Math.max(0, currentCol - 1); x <= Math.min(width - 1, currentCol + 1); x += 1) {
+                if (!visited[y][x] && grid[y][x]) {
+                  visited[y][x] = true;
+                  stack.push([y, x]);
+                }
+              }
+            }
+          }
+          if (component.length <= 2) {
+            const averageCoverage = component.reduce((sum, [y, x]) => sum + coverage[y][x], 0) / component.length;
+            if (averageCoverage < 0.72) {
+              component.forEach(([y, x]) => { grid[y][x] = 0; });
+            }
+          }
+        }
+      }
+    }
+
+    return grid;
+  }
+
   function analyzePreciseImageCells(image, width, height, threshold, invert) {
     // Read the source pixels directly. Canvas enlargement and interpolation can
     // move a hard edge into a neighboring cell, especially with pixel art.
@@ -3131,7 +3212,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const fittedHeight = sourceHeight * fitScale;
     const offsetX = (width - fittedWidth) / 2;
     const offsetY = (height - fittedHeight) / 2;
-    const grid = [];
+    const coverage = [];
 
     for (let row = 0; row < height; row += 1) {
       const line = [];
@@ -3166,14 +3247,12 @@ window.NONOGRAM_FIREBASE_CONFIG = {
           }
         }
 
-        // Majority coverage is deterministic: a source pixel maps 1:1 when the
-        // image and grid sizes match, and resizing uses true box-area sampling.
-        line.push(visibleWeight > 0 && foregroundWeight / visibleWeight >= 0.5 ? 1 : 0);
+        line.push(visibleWeight > 0 ? foregroundWeight / visibleWeight : 0);
       }
-      grid.push(line);
+      coverage.push(line);
     }
 
-    return grid;
+    return refinePreciseCoverage(coverage);
   }
 
   function analyzeImageCells(image, width, height, invert, preserveRatio) {
@@ -3303,7 +3382,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.convertPreview.innerHTML = "";
     els.convertPreview.appendChild(renderMiniGrid(convertedGrid, { interactive: false }));
     els.convertSummary.textContent = mode === "precise"
-      ? `${width}x${height} \uc815\ubc00 \ub3c4\uc548\uc73c\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4. \ubbf8\uc138\ud55c \uc120\uacfc \ub3c5\ub9bd\ub41c \uce78\uc744 \uc720\uc9c0\ud569\ub2c8\ub2e4.`
+      ? `${width}x${height} \uc815\ubc00 \ub3c4\uc548\uc73c\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4. \uc5f0\uacb0\ub41c \ubbf8\uc138 \uc120\uc740 \uc720\uc9c0\ud558\uace0 \uace0\ub9bd\ub41c \ud280\ub294 \ud53d\uc140\uc740 \uc81c\uac70\ud588\uc2b5\ub2c8\ub2e4.`
       : `${width}x${height} \uc0ac\uc9c4 \ubcf4\uc815 \ubaa8\ub4dc\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4.`;
   }
 
