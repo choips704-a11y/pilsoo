@@ -1266,7 +1266,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-15-full-clues-1";
+  const APP_VERSION = "2026-07-15-delete-pieces-1";
   const MAX_HINTS = 3;
   let db = null;
   let rtdb = null;
@@ -1786,6 +1786,9 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   function hydratePuzzleSelects() {
     [els.puzzleSelect, els.reviewPuzzleSelect, els.mergePuzzleSelect, els.splitPuzzleSelect].forEach((select) => {
       const selected = select.value;
+      const availablePuzzles = select === els.splitPuzzleSelect
+        ? puzzles.filter((puzzle) => !puzzle.parentId)
+        : puzzles;
       select.innerHTML = "";
       if (select === els.reviewPuzzleSelect) {
         const allOption = document.createElement("option");
@@ -1793,7 +1796,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
         allOption.textContent = "\uc804\uccb4 \ud65c\ub3d9";
         select.appendChild(allOption);
       }
-      puzzles.forEach((puzzle) => {
+      availablePuzzles.forEach((puzzle) => {
         const option = document.createElement("option");
         option.value = puzzle.id;
         option.textContent = `${puzzle.title} (${puzzle.grid[0].length}x${puzzle.grid.length})`;
@@ -1801,7 +1804,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       });
       if (selected === "__all__" && select === els.reviewPuzzleSelect) {
         select.value = selected;
-      } else if (puzzles.some((puzzle) => puzzle.id === selected)) {
+      } else if (availablePuzzles.some((puzzle) => puzzle.id === selected)) {
         select.value = selected;
       }
     });
@@ -2280,15 +2283,18 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   async function deleteFirebasePuzzleData(ids) {
-    if (!sharedStoreReady()) return;
+    const failedIds = [];
+    if (!sharedStoreReady()) return failedIds;
     for (const id of ids) {
       try {
-        await deleteRemotePuzzle(id);
         await deleteRemoteSessionsForPuzzle(id);
+        await deleteRemotePuzzle(id);
       } catch (error) {
         console.warn(error);
+        failedIds.push(id);
       }
     }
+    return failedIds;
   }
 
   function queueSave() {
@@ -2436,12 +2442,19 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     els.message.textContent = "\uc120\ud0dd\ud55c \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.";
   }
 
-  async function deletePiecesForSelectedParent() {
-    const parentId = els.combineParentSelect.value || els.splitPuzzleSelect.value;
-    const parent = puzzles.find((puzzle) => puzzle.id === parentId);
-    const pieces = puzzles.filter((puzzle) => puzzle.parentId === parentId && !isBuiltInPuzzle(puzzle.id));
+  function pieceBelongsToParent(puzzle, parentId) {
+    return !isBuiltInPuzzle(puzzle.id) && (
+      puzzle.parentId === parentId ||
+      (Boolean(puzzle.piece) && puzzle.id.startsWith(`${parentId}-piece-`))
+    );
+  }
 
-    if (!parent || !pieces.length) {
+  async function deletePiecesForSelectedParent() {
+    const parentId = els.splitPuzzleSelect.value || els.combineParentSelect.value;
+    const parent = puzzles.find((puzzle) => puzzle.id === parentId);
+    const pieces = puzzles.filter((puzzle) => pieceBelongsToParent(puzzle, parentId));
+
+    if (!parent || parent.parentId || !pieces.length) {
       els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
       return;
     }
@@ -2449,17 +2462,24 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const ok = !window.confirm || window.confirm(`"${parent.title}"\uc758 \uc870\uac01 ${pieces.length}\uac1c\ub97c \uc9c0\uc6b8\uae4c\uc694?`);
     if (!ok) return;
 
-    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
+    const result = await deletePuzzlesByIds(pieces.map((piece) => piece.id));
     splitPieces = [];
     combinedPieceGrid = null;
     els.piecePreview.innerHTML = "";
     els.combinedPiecePreview.innerHTML = "";
-    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
-    els.combinePieceSummary.textContent = "\uc870\uac01 \ud37c\uc990\uc744 \ub2e4\uc2dc \ucd94\uac00\ud558\uba74 \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc5ec\uc904 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
+    if (result.failedIds.length) {
+      els.pieceSummary.textContent = `${result.deletedIds.length}\uac1c\ub294 \uc0ad\uc81c\ud588\uace0 ${result.failedIds.length}\uac1c\ub294 \uc0ad\uc81c\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. \uc5f0\uacb0\uc744 \ud655\uc778\ud558\uace0 \ub2e4\uc2dc \ub204\ub974\uc138\uc694.`;
+      setSaveStatus("\uc870\uac01 \uc77c\ubd80 \uc0ad\uc81c \uc2e4\ud328", "error");
+    } else {
+      els.pieceSummary.textContent = `${result.deletedIds.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4. \uc6d0\ubcf8 \ud37c\uc990\uc740 \uc720\uc9c0\ub429\ub2c8\ub2e4.`;
+      els.combinePieceSummary.textContent = "\uc870\uac01 \ud37c\uc990\uc744 \ub2e4\uc2dc \ucd94\uac00\ud558\uba74 \ud559\uc0dd\uc5d0\uac8c \ubcf4\uc5ec\uc904 \uc218 \uc788\uc2b5\ub2c8\ub2e4.";
+    }
   }
 
   async function deleteAllPieces() {
-    const pieces = puzzles.filter((puzzle) => puzzle.parentId && !isBuiltInPuzzle(puzzle.id));
+    const pieces = puzzles.filter((puzzle) => (
+      !isBuiltInPuzzle(puzzle.id) && (puzzle.parentId || puzzle.piece)
+    ));
 
     if (!pieces.length) {
       els.pieceSummary.textContent = "\uc9c0\uc6b8 \uc870\uac01 \ud37c\uc990\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.";
@@ -2469,13 +2489,18 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const ok = !window.confirm || window.confirm(`\ubaa8\ub4e0 \uc870\uac01 \ud37c\uc990 ${pieces.length}\uac1c\uc640 \uad00\ub828 \ud480\uc774 \uae30\ub85d\uc744 \uc804\ubd80 \uc9c0\uc6b8\uae4c\uc694?`);
     if (!ok) return;
 
-    await deletePuzzlesByIds(pieces.map((piece) => piece.id));
+    const result = await deletePuzzlesByIds(pieces.map((piece) => piece.id));
     splitPieces = [];
     combinedPieceGrid = null;
     els.piecePreview.innerHTML = "";
     els.combinedPiecePreview.innerHTML = "";
-    els.pieceSummary.textContent = `${pieces.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc804\ubd80 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4.`;
-    els.combinePieceSummary.textContent = "\uc870\uac01 \ud480\uc774 \uae30\ub85d\ub3c4 \ud568\uaed8 \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.";
+    if (result.failedIds.length) {
+      els.pieceSummary.textContent = `${result.deletedIds.length}\uac1c\ub294 \uc0ad\uc81c\ud588\uace0 ${result.failedIds.length}\uac1c\ub294 \uc0ad\uc81c\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.`;
+      setSaveStatus("\uc870\uac01 \uc77c\ubd80 \uc0ad\uc81c \uc2e4\ud328", "error");
+    } else {
+      els.pieceSummary.textContent = `${result.deletedIds.length}\uac1c \uc870\uac01 \ud37c\uc990\uc744 \uc804\ubd80 \uc9c0\uc6e0\uc2b5\ub2c8\ub2e4. \uc6d0\ubcf8 \ud37c\uc990\uc740 \uc720\uc9c0\ub429\ub2c8\ub2e4.`;
+      els.combinePieceSummary.textContent = "\uc870\uac01 \ud480\uc774 \uae30\ub85d\ub3c4 \ud568\uaed8 \uc815\ub9ac\ud588\uc2b5\ub2c8\ub2e4.";
+    }
   }
 
   async function deleteAllGenerated() {
@@ -2504,14 +2529,17 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   async function deletePuzzlesByIds(ids) {
-    const deletableIds = ids.filter((id) => !isBuiltInPuzzle(id));
-    if (!deletableIds.length) return;
+    const deletableIds = Array.from(new Set(ids.filter((id) => !isBuiltInPuzzle(id))));
+    if (!deletableIds.length) return { deletedIds: [], failedIds: [] };
 
-    removeLocalCustomPuzzles(deletableIds);
-    removeLocalSessionsForPuzzleIds(deletableIds);
-    await deleteFirebasePuzzleData(deletableIds);
+    const failedIds = await deleteFirebasePuzzleData(deletableIds);
+    const failedSet = new Set(failedIds);
+    const deletedIds = deletableIds.filter((id) => !failedSet.has(id));
+    removeLocalCustomPuzzles(deletedIds);
+    removeLocalSessionsForPuzzleIds(deletedIds);
     await loadPuzzles();
-    setSaveStatus("\uc0ad\uc81c\ub428", "online");
+    setSaveStatus(failedIds.length ? "\uc77c\ubd80 \uc0ad\uc81c \uc2e4\ud328" : "\uc0ad\uc81c\ub428", failedIds.length ? "error" : "online");
+    return { deletedIds, failedIds };
   }
 
   function tick() {
