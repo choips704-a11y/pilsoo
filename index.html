@@ -649,6 +649,22 @@ code {
   background: var(--ink);
 }
 
+.mini-grid.editable .mini-cell {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mini-grid.editable .mini-cell:hover {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.mini-grid.editable .mini-cell:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
 .check-field {
   display: flex;
   align-items: start;
@@ -1222,7 +1238,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-14-clean-precise-conversion-1";
+  const APP_VERSION = "2026-07-14-editable-conversion-1";
   let db = null;
   let rtdb = null;
   let puzzles = builtInPuzzles.slice();
@@ -3034,15 +3050,44 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const config = options || {};
     const wrap = document.createElement("div");
     wrap.className = ["mini-grid", config.className].filter(Boolean).join(" ");
+    wrap.classList.toggle("editable", Boolean(config.interactive));
     const size = cellSizeFor(grid);
     const minCell = config.minCell || 10;
     const maxCell = config.maxCell || 22;
     wrap.style.setProperty("--cell-size", `${Math.max(minCell, Math.min(maxCell, size))}px`);
     wrap.style.gridTemplateColumns = `repeat(${grid[0].length}, var(--cell-size))`;
-    grid.forEach((row) => {
-      row.forEach((value) => {
+    grid.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => {
         const cell = document.createElement("span");
-        cell.className = value === 1 ? "mini-cell filled" : "mini-cell";
+        cell.className = "mini-cell";
+
+        const updateCell = () => {
+          const filled = grid[rowIndex][colIndex] === 1;
+          cell.classList.toggle("filled", filled);
+          if (config.interactive) cell.setAttribute("aria-checked", String(filled));
+        };
+
+        if (config.interactive) {
+          cell.tabIndex = 0;
+          cell.setAttribute("role", "checkbox");
+          cell.setAttribute("aria-label", `${rowIndex + 1}행 ${colIndex + 1}열`);
+          const toggleCell = () => {
+            grid[rowIndex][colIndex] = grid[rowIndex][colIndex] === 1 ? 0 : 1;
+            updateCell();
+            if (typeof config.onChange === "function") {
+              config.onChange(grid, rowIndex, colIndex);
+            }
+          };
+          cell.addEventListener("click", toggleCell);
+          cell.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggleCell();
+            }
+          });
+        }
+
+        updateCell();
         wrap.appendChild(cell);
       });
     });
@@ -3380,10 +3425,13 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     }
 
     els.convertPreview.innerHTML = "";
-    els.convertPreview.appendChild(renderMiniGrid(convertedGrid, { interactive: false }));
+    els.convertPreview.appendChild(renderMiniGrid(convertedGrid, {
+      interactive: true,
+      className: "converted-editor"
+    }));
     els.convertSummary.textContent = mode === "precise"
-      ? `${width}x${height} \uc815\ubc00 \ub3c4\uc548\uc73c\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4. \uc5f0\uacb0\ub41c \ubbf8\uc138 \uc120\uc740 \uc720\uc9c0\ud558\uace0 \uace0\ub9bd\ub41c \ud280\ub294 \ud53d\uc140\uc740 \uc81c\uac70\ud588\uc2b5\ub2c8\ub2e4.`
-      : `${width}x${height} \uc0ac\uc9c4 \ubcf4\uc815 \ubaa8\ub4dc\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4.`;
+      ? `${width}x${height} \uc815\ubc00 \ub3c4\uc548\uc73c\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4. \uc5f0\uacb0\ub41c \ubbf8\uc138 \uc120\uc740 \uc720\uc9c0\ud558\uace0 \uace0\ub9bd\ub41c \ud280\ub294 \ud53d\uc140\uc740 \uc81c\uac70\ud588\uc2b5\ub2c8\ub2e4. \ubbf8\ub9ac\ubcf4\uae30 \uce78\uc744 \ub204\ub974\uba74 \uc9c1\uc811 \ucc44\uc6b0\uac70\ub098 \uc9c0\uc6b8 \uc218 \uc788\uc2b5\ub2c8\ub2e4.`
+      : `${width}x${height} \uc0ac\uc9c4 \ubcf4\uc815 \ubaa8\ub4dc\ub85c \ubcc0\ud658\ud588\uc2b5\ub2c8\ub2e4. \ubbf8\ub9ac\ubcf4\uae30 \uce78\uc744 \ub204\ub974\uba74 \uc9c1\uc811 \ucc44\uc6b0\uac70\ub098 \uc9c0\uc6b8 \uc218 \uc788\uc2b5\ub2c8\ub2e4.`;
   }
 
   function switchTab(tabName) {
