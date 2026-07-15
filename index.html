@@ -310,6 +310,12 @@ button.secondary:hover,
   background: var(--soft);
 }
 
+.session-row.active {
+  border-color: var(--accent);
+  background: #eef7ff;
+  box-shadow: 0 0 0 2px rgba(24, 111, 184, .14);
+}
+
 button.danger {
   border-color: rgba(188, 75, 45, .45);
   color: var(--warn);
@@ -1266,7 +1272,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     convertPreview: document.getElementById("convertPreview")
   };
 
-  const APP_VERSION = "2026-07-15-delete-pieces-1";
+  const APP_VERSION = "2026-07-15-stable-review-1";
   const MAX_HINTS = 3;
   let db = null;
   let rtdb = null;
@@ -1286,6 +1292,8 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   let combinedPieceGrid = null;
   let uploadedImage = null;
   let liveRefreshBusy = false;
+  let selectedReviewSessionKey = "";
+  let renderedSessionsSignature = "";
   let unsubscribePuzzles = null;
   let unsubscribeSessions = null;
   let dragPaint = null;
@@ -2735,8 +2743,30 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     parent.appendChild(badge);
   }
 
+  function sessionRenderSignature(session) {
+    return JSON.stringify([
+      sessionStudentPuzzleKey(session),
+      Boolean(session.submitted),
+      Boolean(session.solved),
+      Number(session.hintUsed) || 0,
+      Number(session.seconds) || 0,
+      sessionTimeValue(session),
+      session.state
+    ]);
+  }
+
+  function selectReviewSession(session) {
+    selectedReviewSessionKey = sessionStudentPuzzleKey(session);
+    els.sessionList.querySelectorAll(".session-row").forEach((row) => {
+      row.classList.toggle("active", row.dataset.sessionKey === selectedReviewSessionKey);
+    });
+    renderSessionPreview(session);
+  }
+
   function renderSessions() {
     if (!loadedSessions.length) {
+      selectedReviewSessionKey = "";
+      renderedSessionsSignature = "empty";
       els.reviewSummary.textContent = text.noSessions;
       els.sessionList.replaceChildren(Object.assign(document.createElement("div"), {
         className: "empty",
@@ -2750,12 +2780,23 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     const submittedCount = loadedSessions.filter((session) => session.submitted).length;
     const solvedCount = loadedSessions.filter((session) => session.solved).length;
     els.reviewSummary.textContent = `${loadedSessions.length}${text.loadedSessions} / \uc81c\ucd9c ${submittedCount}\uac1c / \uc815\ub2f5 ${solvedCount}\uac1c`;
+    const nextSignature = loadedSessions.map(sessionRenderSignature).join("|");
+    if (nextSignature === renderedSessionsSignature) return;
+    renderedSessionsSignature = nextSignature;
+
+    const previousScrollTop = els.sessionList.scrollTop;
+    const selectedSession = loadedSessions.find((session) => (
+      sessionStudentPuzzleKey(session) === selectedReviewSessionKey
+    )) || loadedSessions[0];
+    selectedReviewSessionKey = sessionStudentPuzzleKey(selectedSession);
     renderProgressTable();
     const fragment = document.createDocumentFragment();
-    loadedSessions.forEach((session, index) => {
+    loadedSessions.forEach((session) => {
       const stats = sessionStats(session);
       const button = document.createElement("div");
-      button.className = "session-row";
+      const sessionKey = sessionStudentPuzzleKey(session);
+      button.className = `session-row${sessionKey === selectedReviewSessionKey ? " active" : ""}`;
+      button.dataset.sessionKey = sessionKey;
       button.tabIndex = 0;
       button.setAttribute("role", "button");
       const name = document.createElement("strong");
@@ -2771,11 +2812,11 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       appendBadge(meta, `\uc815\ud655\ub3c4 ${stats.accuracy === null ? "-" : `${stats.accuracy}%`}`);
       button.appendChild(name);
       button.appendChild(meta);
-      button.addEventListener("click", () => renderSessionPreview(session));
+      button.addEventListener("click", () => selectReviewSession(session));
       button.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          renderSessionPreview(session);
+          selectReviewSession(session);
         }
       });
       const deleteBtn = document.createElement("button");
@@ -2788,9 +2829,10 @@ window.NONOGRAM_FIREBASE_CONFIG = {
       });
       button.appendChild(deleteBtn);
       fragment.appendChild(button);
-      if (index === 0) renderSessionPreview(session);
     });
     els.sessionList.replaceChildren(fragment);
+    els.sessionList.scrollTop = previousScrollTop;
+    renderSessionPreview(selectedSession);
   }
 
   function renderProgressTable() {
@@ -2824,6 +2866,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
   }
 
   function renderSessionPreview(session) {
+    selectedReviewSessionKey = sessionStudentPuzzleKey(session);
     els.sessionPreview.innerHTML = "";
     const stats = sessionStats(session);
     const title = document.createElement("h3");
@@ -3528,6 +3571,7 @@ window.NONOGRAM_FIREBASE_CONFIG = {
     if (!teacherMode || liveRefreshBusy) return;
     const tabName = activeTabName();
     if (!["review", "merge", "pieces"].includes(tabName)) return;
+    if (["review", "merge"].includes(tabName) && sharedStoreReady() && unsubscribeSessions) return;
     liveRefreshBusy = true;
     try {
       if (tabName === "review") {
